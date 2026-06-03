@@ -1,26 +1,11 @@
 import type { NextConfig } from "next";
 
 const securityHeaders = [
-  {
-    key: "X-Frame-Options",
-    value: "SAMEORIGIN",
-  },
-  {
-    key: "X-Content-Type-Options",
-    value: "nosniff",
-  },
-  {
-    key: "Referrer-Policy",
-    value: "strict-origin-when-cross-origin",
-  },
-  {
-    key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(self), payment=(self)",
-  },
-  {
-    key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
-  },
+  { key: "X-Frame-Options",           value: "SAMEORIGIN" },
+  { key: "X-Content-Type-Options",    value: "nosniff" },
+  { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy",        value: "camera=(), microphone=(), geolocation=(self), payment=(self)" },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   {
     key: "Content-Security-Policy",
     value: [
@@ -31,6 +16,9 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://maps.googleapis.com https://maps.gstatic.com https://*.supabase.co https://*.tile.openstreetmap.org https://unpkg.com https://www.google-analytics.com https://www.googletagmanager.com https://*.stripe.com",
       "frame-src https://js.stripe.com https://*.stripe.com https://hcaptcha.com https://*.hcaptcha.com",
       "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://maps.googleapis.com https://api.frankfurter.app https://hcaptcha.com https://*.hcaptcha.com https://va.vercel-scripts.com https://nominatim.openstreetmap.org https://*.tile.openstreetmap.org https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net https://www.googletagmanager.com https://region1.analytics.google.com https://region1.google-analytics.com https://api.anthropic.com https://api.stripe.com https://*.stripe.com",
+      // Blocks form submissions and navigations to any domain not in this list
+      // stripe.com included because Stripe redirects to checkout.stripe.com after payment intent
+      "form-action 'self' https://checkout.stripe.com https://*.stripe.com",
       "worker-src 'self' blob:",
     ].join("; "),
   },
@@ -38,12 +26,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   async headers() {
-    return [
-      {
-        source: "/(.*)",
-        headers: securityHeaders,
-      },
-    ];
+    return [{ source: "/(.*)", headers: securityHeaders }];
   },
 };
 
