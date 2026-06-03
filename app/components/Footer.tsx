@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
 
 const year = new Date().getFullYear();
 
-// ── Customer footer ───────────────────────────────────────────────────────────
-function CustomerFooter() {
+export default function Footer() {
   return (
     <footer className="w-full bg-black text-white">
 
@@ -44,9 +42,9 @@ function CustomerFooter() {
 
             <div className="flex flex-col gap-3">
               <p className="text-xs font-black uppercase tracking-widest text-white/50">Company</p>
-              <Link href="/about"                                    className="text-sm font-bold text-white hover:underline">About Us</Link>
+              <Link href="/about"                                         className="text-sm font-bold text-white hover:underline">About Us</Link>
               <a    href="https://portal.camel-global.com/partner/signup" className="text-sm font-bold text-white hover:underline">Become a Partner</a>
-              <Link href="/contact"                                   className="text-sm font-bold text-white hover:underline">Contact</Link>
+              <Link href="/contact"                                        className="text-sm font-bold text-white hover:underline">Contact</Link>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -66,16 +64,12 @@ function CustomerFooter() {
           </div>
         </div>
 
-        <div className="mt-10 border-t border-white/20 pt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-bold text-white">© {year} NTUK Ltd. All rights reserved. Trading as Camel Global.</p>
-          <p className="text-sm font-bold text-white">Registered in England &amp; Wales</p>
+        <div className="mt-10 border-t border-white/20 pt-6">
+          <p className="text-xs font-bold text-white leading-relaxed">
+            © {year} NTUK Ltd. All rights reserved. Trading as Camel Global. · Registered in England &amp; Wales · Company No. 08765474
+          </p>
         </div>
       </div>
     </footer>
   );
-}
-
-// ── Router ────────────────────────────────────────────────────────────────────
-export default function Footer() {
-  return <CustomerFooter />;
 }
