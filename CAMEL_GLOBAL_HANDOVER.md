@@ -15,6 +15,7 @@
 - **Claude must always write full files** — no partial diffs, no "change X to Y" instructions.
 - **When rebranding/restyling, never touch API call parameters or business logic — visual classes only.**
 - **ChatWidget.tsx is identical in both repos** — always update both when changing it.
+- **Footer.tsx exists in both repos but they are different** — portal has PortalFooter/DriverFooter/CustomerFooter, customer has CustomerFooter only. Update separately.
 - **Always `git pull` before starting any session** — collaborator may have pushed.
 
 ---
@@ -45,10 +46,10 @@
 ### Deploy Commands
 ```bash
 # Portal
-cd ~/camel-portal && git add . && git commit -m "message" && git push origin main
+cd ~/camel-portal && git add <file> && git commit -m "message" && git push origin main
 
 # Customer
-cd ~/camel-customer && git add . && git commit -m "message" && git push origin main
+cd ~/camel-customer && git add <file> && git commit -m "message" && git push origin main
 ```
 
 ### Portals
@@ -84,44 +85,39 @@ cd ~/camel-customer && git add . && git commit -m "message" && git push origin m
 | `lib/useCurrency.ts` | React hook — currency state, live rates, fmt helpers |
 | `lib/email.ts` | Resend email sender — all notification helpers. Supports `attachments` array (base64). `sendReviewReminderEmail` links to `${NEXT_PUBLIC_SITE_URL}/bookings/${requestId}#review` — ensure `NEXT_PUBLIC_SITE_URL=https://www.camel-global.com` is set in camel-customer Vercel env vars. |
 | `app/api/partner/bids/route.ts` | Partner bid submission — saves mileage_limit + security_deposit_notes |
-| `app/api/partner/requests/[id]/route.ts` | Partner request detail API |
-| `app/api/partner/bookings/[id]/route.ts` | Partner booking detail API |
-| `app/api/partner/bookings/[id]/update/route.ts` | Partner booking update — fuel override, driver assignment, lock logic |
-| `app/api/partner/bookings/[id]/complete/route.ts` | Partner/admin manual completion trigger — calls completeBooking() |
 | `app/api/partner/invoices/route.ts` | GET — lists partner's commission invoices with signed download URLs |
 | `app/api/partner/invoices/generate/route.ts` | POST — partner generates invoice for a period. Selects `created_at` (not `pickup_at`) from `partner_bookings`. |
 | `app/api/partner/stripe/connect/route.ts` | Stripe Express account creation — sets default_currency from partner_profiles.default_currency |
 | `app/api/admin/invoices/route.ts` | GET/POST — admin lists and generates commission invoices. POST selects `created_at` (not `pickup_at`) from `partner_bookings`. |
 | `app/api/admin/accounts/[id]/route.ts` | GET/PATCH — admin account detail. PATCH supports `commission_rate` and `default_currency` updates. |
 | `app/api/internal/complete-booking/route.ts` | Internal route — called from camel-customer when booking reaches completed. Protected by CRON_SECRET. Calls completeBooking(). |
-| `app/api/driver/jobs/route.ts` | Driver jobs API |
-| `app/admin/bookings/[id]/page.tsx` | Admin booking detail — Stripe fee shown as Camel cost, partner payout excludes Stripe fee |
-| `app/admin/bookings/page.tsx` | Admin bookings list — Camel Net Income column, partner payout excludes Stripe fee, CSV updated |
-| `app/admin/reports/page.tsx` | Admin reports — commission invoices section with partner dropdown + month dropdown (starts from current month). calcPayout gives partnerPayout (no Stripe deduction) and camelNetComm. |
-| `app/admin/accounts/[id]/page.tsx` | Admin account detail — includes Billing Currency Override section (admin only) to correct partner currency if wrong during setup. |
-| `app/partner/reports/page.tsx` | Partner reports page — bookings, per-currency summary, Excel export, Commission Invoices section with month dropdown (starts from current month) and generate/download. |
-| `app/partner/profile/page.tsx` | Partner edit profile — currency displayed read-only, not editable |
-| `app/partner/signup/page.tsx` | Partner signup — imports `downloadPartnerTermsPDF` from `lib/portal/partnerTerms.ts` |
+| `app/admin/reports/page.tsx` | Admin reports — commission invoices section with partner dropdown + month dropdown (starts from current month). |
+| `app/admin/accounts/[id]/page.tsx` | Admin account detail — includes Billing Currency Override section (admin only). |
+| `app/partner/reports/page.tsx` | Partner reports — bookings, per-currency summary, Excel export, Commission Invoices section with month dropdown (current month included). |
+| `app/partner/signup/page.tsx` | Partner signup — 5 steps, mobile responsive stepper. Imports `downloadPartnerTermsPDF` from `lib/portal/partnerTerms.ts`. |
 | `app/partner/terms/page.tsx` | Partner T&Cs page — imports all content from `lib/portal/partnerTerms.ts` |
-| `app/driver/jobs/page.tsx` | Driver jobs page |
-| `app/cron/monthly-payout/route.ts` | Monthly payout cron — runs 1st of month, triggers Stripe transfers, generates commission invoices, emails partners. Uses `created_at` (not `pickup_at`) in invoiceBookings map. |
+| `app/partner/onboarding/page.tsx` | Partner onboarding — 7 steps. Mobile responsive. Stripe refresh status calls `onRefreshProfile` after checking. Card padding `p-4 sm:p-8`. |
+| `app/partner/layout.tsx` | Partner layout — auth guard + **approval check**: unapproved partners redirected to `application-submitted` page. Only dashboard, account, profile and info pages accessible before approval. |
+| `app/partner/application-submitted/page.tsx` | Status-aware page — shows "Under Review", "Rejected", or "Thank you" depending on logged-in state. |
+| `app/partner/dashboard/page.tsx` | Partner dashboard — all cards full width on mobile (`grid-cols-1` explicit). |
+| `app/components/Footer.tsx` | Portal footer — `PortalFooter` (partner/admin), `DriverFooter`, `CustomerFooter`. Copyright bar is single line `text-xs` to avoid mobile overflow. |
+| `app/cron/monthly-payout/route.ts` | Monthly payout cron — runs 1st of month. Uses `created_at` (not `pickup_at`). |
+| `next.config.ts` | CSP headers including `form-action 'self'` — blocks redirect to fake payment pages. |
 
 ### Key Libraries & Files — Customer (`~/camel-customer`)
 | File | Purpose |
 |------|---------|
 | `lib/supabase-customer/browser.ts` | Supabase browser client (customers) |
 | `lib/supabase-customer/server.ts` | Exports `createCustomerServerClient()` and `createCustomerServiceRoleSupabaseClient()` |
-| `lib/serverCurrency.ts` | Server-side currency conversion (unused since Chat 36) |
-| `lib/email.ts` | Resend email sender |
-| `lib/portal/generateBookingReceiptPDF.tsx` | Booking confirmation receipt PDF — includes passengers, suitcases, sport_equipment, driver_age, additional_drivers, mileage_limit, security_deposit_notes, dropoffAt, durationMinutes, and "What to bring" checklist section. Logo fetched from portal URL. |
-| `lib/portal/generateCompletionStatementPDF.tsx` | Booking completion statement PDF — includes dropoff_at and duration. Logo fetched from portal URL. |
-| `app/api/test-booking/bookings/[id]/receipt/route.ts` | GET — returns signed URL for booking receipt |
-| `app/api/test-booking/bookings/[id]/completion-statement/route.ts` | GET — returns signed URL for completion statement. Selects dropoff_at and journey_duration_minutes. Always regenerates PDF. |
-| `app/api/test-booking/bookings/[id]/update/route.ts` | POST — customer confirms fuel/insurance. When booking reaches completed, triggers portal internal route to call completeBooking(). |
-| `app/api/test-booking/requests/route.ts` | POST — creates booking request. Min driver age validation is 21 |
+| `lib/portal/generateBookingReceiptPDF.tsx` | Booking confirmation receipt PDF |
+| `lib/portal/generateCompletionStatementPDF.tsx` | Booking completion statement PDF |
+| `app/api/test-booking/bookings/[id]/update/route.ts` | POST — customer confirms fuel/insurance. Triggers portal internal route on completion. |
 | `app/api/payments/create-intent/route.ts` | Creates Stripe payment intent in partner's bid currency |
-| `app/api/webhooks/stripe/route.ts` | Customer webhook — creates booking, generates receipt PDF (with dropoffAt + durationMinutes), sends confirmation emails |
-| `app/page.tsx` | Customer homepage — react-datepicker for date/time selection, useIsDesktop hook for Book Now layout, special requirements above Book Now on mobile |
+| `app/api/webhooks/stripe/route.ts` | Customer webhook — creates booking, generates receipt PDF, sends confirmation emails |
+| `app/api/chat/route.ts` | Customer AI chat — scoped to logged-in customer's bookings only via `customer_user_id` filter |
+| `app/components/Footer.tsx` | Customer footer only — copyright bar single line `text-xs`. |
+| `app/page.tsx` | Customer homepage — react-datepicker, useIsDesktop hook |
+| `next.config.ts` | CSP headers including `form-action 'self' https://checkout.stripe.com https://*.stripe.com` |
 
 ---
 
@@ -136,37 +132,28 @@ cd ~/camel-customer && git add . && git commit -m "message" && git push origin m
 ---
 
 ## Completion Flow (CRITICAL)
-Completion is triggered from the **customer** side when the customer confirms the return fuel match:
-
 1. `app/api/test-booking/bookings/[id]/update/route.ts` (camel-customer) sets `booking_status = completed`
-2. It then calls `POST /api/internal/complete-booking` on the portal with `CRON_SECRET`
-3. `app/api/internal/complete-booking/route.ts` (camel-portal) validates the secret and calls `completeBooking()`
+2. Calls `POST /api/internal/complete-booking` on the portal with `CRON_SECRET`
+3. `app/api/internal/complete-booking/route.ts` (camel-portal) validates secret and calls `completeBooking()`
 4. `completeBooking()` issues Stripe fuel refund, sends customer + partner + admin emails with PDF
 
 ---
 
 ## Stripe Payment Architecture (CRITICAL)
 
-### Currency Architecture (fixed Chat 38)
-- Partner's billing currency is set during Stripe onboarding from `partner_profiles.default_currency`
-- `stripe.accounts.create()` passes `default_currency` — partner's Stripe balance stays in their currency, no conversion
-- Currency is **read-only** in the partner edit profile page — cannot be changed after onboarding
-- Admin can override `default_currency` on the partner profile via the admin account detail page (before Stripe onboarding only)
+### Currency Architecture
+- Partner's billing currency set during Stripe onboarding from `partner_profiles.default_currency`
+- Currency is **read-only** in partner edit profile — admin can override via account detail page (before Stripe onboarding only)
 - Customer always pays in partner bid currency — no conversion
 
-### Payment split — `application_fee_amount` model
+### Payment split
 - **Camel always receives exactly the commission amount** — Stripe fee never reduces it
 - **Stripe fee is borne entirely by Camel** — NOT deducted from partner payout
-- **Partner payout = car hire − commission + fuel charge retained**
+- **Partner payout = car hire − commission + fuel charge**
 - **Camel net income = commission − Stripe fee**
-- **Fuel refunds come from the partner's connected account balance**
-
-### Two-currency model (simplified Chat 36)
-- Customer always pays in partner bid currency — no conversion
-- `currency = charge_currency = bid_currency`, `conversion_rate = 1` always
 
 ### Commission calculation rule
-**NEVER use `commission_amount` or `partner_payout_amount` from the DB for display.** Always recalculate:
+**NEVER use `commission_amount` or `partner_payout_amount` from DB.** Always recalculate:
 ```typescript
 const commAmt = Math.max((car_hire_price * commission_rate) / 100, 10);
 const partnerPayout = Math.max(0, car_hire_price - commAmt + fuel_charge);
@@ -182,37 +169,50 @@ const camelNetComm = Math.max(0, commAmt - stripeFeeInBidCurrency);
 ## Fuel Override Architecture (CRITICAL)
 **Effective fuel = partner override (`collection_fuel_level_partner`) if set, else driver reading (`collection_fuel_level_driver`).**
 
-### Lock logic
-A fuel stage locks when: **effective fuel exists AND customer has confirmed AND customer fuel matches effective fuel.**
+Lock logic: **effective fuel exists AND customer confirmed AND customer fuel matches effective fuel.**
 
 ---
 
 ## Commission Invoice Architecture (CRITICAL)
-- **Auto-generated:** Vercel cron runs 1st of each month at 08:00 UTC (`/api/cron/monthly-payout`)
-- **Covers:** all bookings with `payout_status = ready` for each partner
-- **Process:** Stripe transfer → mark bookings paid → generate PDF → upload to Supabase Storage (`commission-invoices` bucket) → insert `commission_invoices` DB record → email PDF to partner
-- **Invoice number format:** `NTUK-YYYY-MM-NNN` via DB sequence `nextval_commission_invoice`
-- **Date column on PDF:** uses `created_at` from `partner_bookings` — `pickup_at` does NOT exist on that table (it lives on `customer_requests`)
-- **Cancelled bookings:** shown on invoice with zero commission, greyed out, for transparency
-- **Partner download:** `/partner/reports` — Commission Invoices section, month dropdown from current month back 24 months
-- **Admin generate:** `/admin/reports` — Commission Invoices section, partner dropdown + month dropdown
+- **Auto-generated:** Vercel cron 1st of each month at 08:00 UTC
+- **Date column:** uses `created_at` from `partner_bookings` — `pickup_at` does NOT exist on that table
+- **Cancelled bookings:** shown greyed out with zero commission for transparency
+- **Partner download:** `/partner/reports` — month dropdown from current month back 24 months
+- **Admin generate:** `/admin/reports` — partner dropdown + month dropdown
 - **Manual trigger:** `curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://portal.camel-global.com/api/cron/monthly-payout`
 
 ---
 
 ## Partner Terms Architecture (CRITICAL)
-- **Single source of truth:** `lib/portal/partnerTerms.ts` — exports `PARTNER_TERMS`, `TERMS_VERSION`, `TERMS_EFFECTIVE`, `downloadPartnerTermsPDF()`
+- **Single source of truth:** `lib/portal/partnerTerms.ts`
 - **Current version:** `2026-06b` effective 1 June 2026
-- Both `app/partner/signup/page.tsx` and `app/partner/terms/page.tsx` import from this file
-- **To update T&Cs:** edit `lib/portal/partnerTerms.ts` only — both pages update automatically
+- **To update T&Cs:** edit `lib/portal/partnerTerms.ts` only
+
+---
+
+## Partner Approval Gate (CRITICAL)
+- Unapproved partners are blocked from all portal pages except: dashboard, account, profile, info pages
+- Enforced in `app/partner/layout.tsx` via approval check after auth
+- Redirects to `/partner/application-submitted` which shows status-aware messaging
+- **Do not add onboarding, bookings, requests, reports to `isPreApprovalPage`** — these must stay blocked
+
+---
+
+## Security Architecture
+- **CSP `form-action`** — portal: `'self'` only; customer: `'self' https://checkout.stripe.com https://*.stripe.com`
+- **Stripe Radar** — enabled, rules active: block highest risk, block CVC fail, request 3DS
+- **Stripe 2FA** — enabled on live account
+- **GitHub branch protection** — `main` branch requires PR, Repository admin bypass
+- **Vercel notifications** — email on deployment ready and failures
+- **Rotate `STRIPE_SECRET_KEY`** every 6-12 months in both Vercel projects
+- **Pending:** Vercel 2FA (`https://vercel.com/~/security`), GitHub 2FA, Supabase 2FA, Gmail 2FA
 
 ---
 
 ## PDF Logo Architecture
 - Logo file: `~/camel-portal/public/camel-invoice-logo.png`
-- `completeBooking.tsx` (portal) — reads logo from disk via `fs.readFileSync(path.join(process.cwd(), "public", "camel-invoice-logo.png"))`
-- `generateCompletionStatementPDF.tsx` (customer) — fetches from `https://portal.camel-global.com/camel-invoice-logo.png`
-- `generateBookingReceiptPDF.tsx` (customer) — fetches from `https://portal.camel-global.com/camel-invoice-logo.png`
+- `completeBooking.tsx` (portal) — reads from disk via `fs.readFileSync`
+- `generateCompletionStatementPDF.tsx` + `generateBookingReceiptPDF.tsx` (customer) — fetches from `https://portal.camel-global.com/camel-invoice-logo.png`
 
 ---
 
@@ -223,17 +223,12 @@ A fuel stage locks when: **effective fuel exists AND customer has confirmed AND 
 
 ---
 
-## Date Picker (Customer Homepage)
-- Uses `react-datepicker` + `date-fns` (installed Chat 37)
-- Both pickup and dropoff use `showTimeSelect`, 30-minute intervals, `dd/MM/yyyy, HH:mm` format
-- Styled with Camel design (black header, orange selected state)
-- `useIsDesktop()` hook controls Book Now layout — exactly ONE Book Now rendered at all times
-
-## Homepage Book Now Layout (Fixed Chat 37)
-- **Desktop, no additional drivers:** Book Now spans cols 3–4 of driver age grid. Special requirements in cols 1–2 below, "No account needed" in cols 3–4
-- **Desktop, additional drivers:** Book Now full-width below grid
-- **Mobile:** Special requirements above Book Now, always full width
-- Uses `useIsDesktop()` React hook (not CSS breakpoints) to avoid duplicate rendering bugs
+## Mobile Layout Rules
+- All grid sections use explicit `grid-cols-1` on mobile — never rely on default
+- Partner dashboard: all cards full width mobile, stats 2-col, quick actions 2-col
+- Partner signup: stepper shows circles only on mobile, active step label only below
+- Partner onboarding: `Card` uses `p-4 sm:p-8`, `NavButtons` uses `flex-wrap`
+- Footer copyright: single `<p>` with `text-xs` — never two side-by-side `<p>` tags
 
 ---
 
@@ -254,10 +249,9 @@ A fuel stage locks when: **effective fuel exists AND customer has confirmed AND 
 |-----|-------------|
 | `v-stable-chat36-pre` | Chat 36 — single currency model |
 | `v-stable-fuel-override-complete` | Chat 35 — full fuel override flow |
-| `v-stable-chat37-homepage-layout` | Chat 37 — homepage layout fixed (customer repo) |
-| `v-stable-chat37-pre-payout-fix` | Chat 37 — before cancellation net payout fix |
 | `v-stable-chat38-pre-spanish` | Chat 38 — completion email, logo on PDFs, currency locked at onboarding |
-| `v-stable-chat39-testing` | Chat 39 — testing phase: terms shared lib, commission invoices, partner reports invoices, admin currency override, review link fix |
+| `v-stable-chat39-testing` | Chat 39 mid — testing phase checkpoint |
+| `v-stable-chat39-complete` | Chat 39 complete — testing done, security hardened, ready for Spanish translation |
 
 ### Customer (`~/camel-customer`)
 | Tag | Description |
@@ -265,54 +259,45 @@ A fuel stage locks when: **effective fuel exists AND customer has confirmed AND 
 | `v-stable-chat36-pre` | Chat 36 — single currency model |
 | `v-stable-chat37-homepage-layout` | Chat 37 — homepage layout, date picker, Book Now fixed |
 | `v-stable-chat38-pre-spanish` | Chat 38 — completion email, logo on PDFs, currency locked at onboarding |
+| `v-stable-chat39-complete` | Chat 39 complete — testing done, security hardened, ready for Spanish translation |
 
 ### Rollback
 ```bash
-cd ~/camel-portal && git checkout v-stable-chat39-testing
-cd ~/camel-customer && git checkout v-stable-chat38-pre-spanish
+cd ~/camel-portal && git checkout v-stable-chat39-complete
+cd ~/camel-customer && git checkout v-stable-chat39-complete
 ```
 
 ---
 
 ## What Is Working ✅
-- Customer booking flow — homepage with react-datepicker (date + time), driver age, Book Now layout correct on all screen sizes
+- Customer booking flow — homepage, date picker, driver age, Book Now layout correct all screen sizes
 - Guest booking flow — draft survives login/signup redirect
 - Partner bid submission and management
 - Driver job portal
 - Admin approval and account management
-- Full EUR / GBP / USD currency support (customer always pays in bid currency)
+- Partner approval gate — unapproved partners blocked from portal until approved
+- Full EUR / GBP / USD currency support
 - Full commission system — adjustable per partner, default 20%, min €10 floor
-- Fuel level recording — driver OR office can record, effective fuel = partner override || driver reading
-- Office fuel override — partner admin can override driver fuel reading
-- Fuel charge/refund calculation
+- Fuel level recording, override, charge/refund calculation
 - Fuel refund on completion — Stripe partial refund issued automatically
-- Email notifications — all (booking confirmed, completion, review reminder)
-- Review reminder email — links to `${NEXT_PUBLIC_SITE_URL}/bookings/${requestId}#review` (requires `NEXT_PUBLIC_SITE_URL` set in camel-customer Vercel)
-- Completion email — customer receives rich email with PDF attachment (fixed Chat 38)
-- Completion statement PDF — includes dropoff time, duration and logo (fixed Chat 38)
-- Booking receipt PDF — includes dropoff time and duration, logo from portal URL
+- Email notifications — all flows (booking confirmed, completion, review reminder)
+- Review reminder email — correct URL with `NEXT_PUBLIC_SITE_URL`
+- Completion email + PDF attachment
+- Completion statement PDF + booking receipt PDF — all with logo
 - Customer password reset
 - Live status system — 7 checks
-- Partner onboarding — 7 steps including Stripe Express
-- Stripe Connect partner onboarding — default_currency set from partner profile (fixed Chat 38)
-- Partner billing currency — read-only in edit profile, correctable by admin in account detail page
-- Partner + admin bookings and reports
-- Commission invoice PDF — auto-generated monthly, emailed to partner with PDF attachment
-- Commission invoices — downloadable from partner reports page (month dropdown, current month included)
-- Commission invoices — admin can generate on-demand per partner per month from admin reports page
-- Partner terms — single source of truth in `lib/portal/partnerTerms.ts`, version `2026-06b`
-- Stripe payment split — `application_fee_amount` ensures Camel gets exact commission, Stripe fee borne by Camel
-- Partner payout correctly excludes Stripe fee everywhere
-- Camel Net Income = commission − Stripe fee shown in admin reports and CSV
-- Admin bookings page — Camel Net Income column, correct partner payout
-- Admin reports page — all tables, tiles, Financial Dashboard and CSV updated
-- Partner reports page — summary tiles, Excel export, Commission Invoices section
-- Partner booking detail — net payout shows zero on full refund cancellation
-- Document checklist — shown on confirmed booking page and in receipt PDF only
-- Sport equipment, driver age, additional drivers — everywhere and in both PDFs
-- Young driver warning (21–24)
-- Internal complete-booking route — `POST /api/internal/complete-booking` protected by CRON_SECRET
-- Admin currency override — admin can correct partner billing currency from account detail page
+- Partner onboarding — 7 steps, mobile responsive, Stripe refresh status working
+- Partner billing currency — read-only in profile, admin can override
+- Commission invoices — auto-generated monthly, partner download, admin on-demand generate
+- Partner terms — single source of truth `lib/portal/partnerTerms.ts` version `2026-06b`
+- Stripe payment split — exact commission, Stripe fee borne by Camel
+- All financial reporting — admin reports, partner reports, CSV exports
+- Admin currency override — from account detail page
+- Application-submitted page — status-aware (pending/rejected/guest)
+- Mobile layout — all pages fit correctly on mobile
+- Footer copyright — single line, no overflow on mobile
+- Security — CSP form-action, Stripe Radar, Stripe 2FA, GitHub branch protection, Vercel notifications
+- Chat widget — scoped to logged-in user's data only (both customer and partner)
 
 ---
 
@@ -323,9 +308,6 @@ cd ~/camel-customer && git checkout v-stable-chat38-pre-spanish
 - Language toggle (EN / ES) — remember preference in localStorage
 - Do customer site first, then portal
 
-### 2. Continue testing
-- Keep testing all flows and fixing bugs before translation
-
 ---
 
 ## What Still Needs Building (Lower Priority)
@@ -333,59 +315,55 @@ cd ~/camel-customer && git checkout v-stable-chat38-pre-spanish
 - Xero monthly commission endpoint — deferred
 - DAC7 EU platform reporting — deferred
 - Outreach: set up `e.camel-global.com` subdomain in Resend
+- 2FA: Vercel personal (`https://vercel.com/~/security`), GitHub, Supabase, Gmail
 
 ---
 
 ## Collaborator Note
 A collaborator works on `camel-portal` from Windows (`C:/dev/camel-portal`). He built the **Partner Outreach Agent** (`/admin/outreach`). Always `git pull` before starting.
 
-**Note:** `camel-coming-soon` is a git submodule inside `camel-portal`. It always shows as modified in `git status` — this is normal and can be ignored. Use `git add <specific-file>` rather than `git add .` when committing portal changes to avoid submodule conflicts.
+**Note:** `camel-coming-soon` is a git submodule inside `camel-portal`. Always shows as modified in `git status` — ignore it. Use `git add <specific-file>` to avoid submodule conflicts.
 
 ---
 
 ## Session Log
 
 ### Chat 39 (Completed)
-**Testing phase — bug fixes and feature completions**
+**Testing, bug fixes, mobile fixes, security hardening**
 
-1. `lib/portal/partnerTerms.ts` (portal) — **new file**. Single source of truth for partner T&Cs. Exports `PARTNER_TERMS`, `TERMS_VERSION` (`2026-06b`), `TERMS_EFFECTIVE`, `downloadPartnerTermsPDF()`.
-2. `app/partner/signup/page.tsx` (portal) — removed inline terms data, imports `downloadPartnerTermsPDF` from shared lib.
-3. `app/partner/terms/page.tsx` (portal) — imports all content from shared lib.
-4. `app/partner/reports/page.tsx` (portal) — added Commission Invoices section: lists past invoices, generate/download by month dropdown (current month included).
-5. `app/admin/reports/page.tsx` (portal) — fixed duplicate months in invoice generator dropdown; month dropdown now starts from current month.
-6. `lib/portal/generateCommissionInvoice.tsx` (portal) — added Date column to PDF table; shows all bookings including zero-commission cancelled ones (greyed, "nil"); renamed `pickup_at` → `created_at` in `InvoiceBooking` type (pickup_at does not exist on partner_bookings).
-7. `app/api/partner/invoices/generate/route.ts` (portal) — selects `created_at` instead of `pickup_at`.
-8. `app/api/admin/invoices/route.ts` (portal) — selects `created_at` instead of `pickup_at`.
-9. `app/cron/monthly-payout/route.ts` (portal) — selects `created_at` instead of `pickup_at`; passes `created_at` in invoiceBookings map.
-10. `app/api/admin/accounts/[id]/route.ts` (portal) — PATCH now supports `default_currency` in addition to `commission_rate`.
-11. `app/admin/accounts/[id]/page.tsx` (portal) — added Billing Currency Override section in right column with warning note.
-12. `NEXT_PUBLIC_SITE_URL` — set to `https://www.camel-global.com` in camel-customer Vercel env vars to fix review email links pointing to `/coming-soon`.
-13. Stable tag: `v-stable-chat39-testing` (portal).
+1. `lib/portal/partnerTerms.ts` — single source of truth for partner T&Cs
+2. `app/partner/signup/page.tsx` — terms import, mobile stepper fix, padding fix
+3. `app/partner/terms/page.tsx` — imports from shared lib
+4. `app/partner/reports/page.tsx` — Commission Invoices section, month dropdown
+5. `app/admin/reports/page.tsx` — invoice month dropdown fix, starts from current month
+6. `lib/portal/generateCommissionInvoice.tsx` — date column, cancelled bookings shown, `created_at` fix
+7. `app/api/partner/invoices/generate/route.ts` — `created_at` fix
+8. `app/api/admin/invoices/route.ts` — `created_at` fix
+9. `app/cron/monthly-payout/route.ts` — `created_at` fix
+10. `app/api/admin/accounts/[id]/route.ts` — PATCH supports `default_currency`
+11. `app/admin/accounts/[id]/page.tsx` — Billing Currency Override section
+12. `app/partner/layout.tsx` — approval gate blocks unapproved partners
+13. `app/partner/application-submitted/page.tsx` — status-aware messaging
+14. `app/partner/dashboard/page.tsx` — mobile full-width cards fix
+15. `app/partner/onboarding/page.tsx` — mobile width fix, Stripe refresh status fix
+16. `app/components/Footer.tsx` (portal) — single-line copyright, no mobile overflow
+17. `app/components/Footer.tsx` (customer) — single-line copyright
+18. `next.config.ts` (portal) — `form-action 'self'` CSP directive
+19. `next.config.ts` (customer) — `form-action` with Stripe domains
+20. `NEXT_PUBLIC_SITE_URL` — set in camel-customer Vercel to fix review email links
+21. Stripe Radar rules enabled — highest risk block, CVC block, 3DS request
+22. GitHub branch protection — main branch, Repository admin bypass
+23. Vercel deployment notifications — email on deployment ready
+24. Stable tags: `v-stable-chat39-complete` (both repos)
 
 ### Chat 38 (Completed)
 **Completion email, PDF logo, currency architecture fix**
 
-1. `lib/portal/completeBooking.tsx` (portal) — replaced inline `require()` customer DB client with direct REST fetch. Added `fs.readFileSync` for logo. Fixed customer email not sending.
-2. `app/api/internal/complete-booking/route.ts` (portal) — **new file**. Internal route protected by `CRON_SECRET`.
-3. `app/api/test-booking/bookings/[id]/update/route.ts` (customer) — added `fetch` call to portal internal route when `booking_status = completed`.
-4. `app/api/test-booking/bookings/[id]/completion-statement/route.ts` (customer) — added `dropoff_at` and `journey_duration_minutes`. Always regenerates PDF.
-5. `lib/portal/generateCompletionStatementPDF.tsx` (customer) — fixed logo URL.
-6. `app/api/partner/stripe/connect/route.ts` (portal) — added `default_currency` to `stripe.accounts.create()`.
-7. `app/partner/profile/page.tsx` (portal) — currency read-only.
-8. `customer_requests` RLS — added permissive policy.
-9. Stable tags: `v-stable-chat38-pre-spanish` (both repos).
-
 ### Chat 37 (Completed)
-**Homepage layout, date picker, Stripe fee architecture fix, completion email fix**
+**Homepage layout, date picker, Stripe fee architecture fix**
 
 ### Chat 36 (Completed)
-**Single currency model — customer always pays in partner bid currency**
-
-### Chat 32b (Completed)
-**Stripe payment architecture fix, rich metadata, fee wording corrected**
-
-### Chat 32 (Completed)
-**Min age 21, young driver warning, mileage/deposit on bids, document checklist, completion email fix, terms updated**
+**Single currency model**
 
 ---
 
@@ -409,17 +387,13 @@ find ~/camel-customer -not -path '*/node_modules/*' -not -path '*/.git/*' -not -
 # Create stable tag
 git tag -a v-tag-name -m "description" && git push origin v-tag-name
 
-# Roll back
-git checkout v-tag-name
-
 # Manual cron trigger
 curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://portal.camel-global.com/api/cron/monthly-payout
 
-# IMPORTANT: camel-coming-soon is a submodule — always shows modified in git status, ignore it.
-# Commit specific files to avoid submodule issues:
+# IMPORTANT: camel-coming-soon is a submodule — always shows modified, ignore it.
 git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 ```
 
 ---
 
-*Last updated: Chat 39 — Testing phase: partner terms single source of truth, commission invoices on partner/admin reports, invoice PDF date column + cancelled bookings shown, admin currency override, review email link fix (NEXT_PUBLIC_SITE_URL), invoice month dropdowns include current month.*
+*Last updated: Chat 39 complete — testing done, mobile fixes, security hardened (CSP, Stripe Radar, GitHub branch protection), partner approval gate, status-aware application page. Next: Spanish translation.*
