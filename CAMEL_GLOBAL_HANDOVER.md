@@ -17,6 +17,7 @@
 - **ChatWidget.tsx is identical in both repos** — always update both when changing it.
 - **Footer.tsx exists in both repos but they are different** — portal has PortalFooter/DriverFooter/CustomerFooter, customer has CustomerFooter only. Update separately.
 - **Always `git pull` before starting any session** — collaborator may have pushed.
+- **zsh square bracket paths** — always quote dynamic route paths in git commands: `'app/partner/bookings/[id]/page.tsx'`
 
 ---
 
@@ -84,25 +85,11 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | `lib/currency.ts` | All currency utilities — EUR, GBP, USD formatting + conversion |
 | `lib/useCurrency.ts` | React hook — currency state, live rates, fmt helpers |
 | `lib/email.ts` | Resend email sender — all notification helpers. Supports `attachments` array (base64). `sendReviewReminderEmail` links to `${NEXT_PUBLIC_SITE_URL}/bookings/${requestId}#review` — ensure `NEXT_PUBLIC_SITE_URL=https://www.camel-global.com` is set in camel-customer Vercel env vars. |
-| `app/api/partner/bids/route.ts` | Partner bid submission — saves mileage_limit + security_deposit_notes |
-| `app/api/partner/invoices/route.ts` | GET — lists partner's commission invoices with signed download URLs |
-| `app/api/partner/invoices/generate/route.ts` | POST — partner generates invoice for a period. Selects `created_at` (not `pickup_at`) from `partner_bookings`. |
-| `app/api/partner/stripe/connect/route.ts` | Stripe Express account creation — sets default_currency from partner_profiles.default_currency |
-| `app/api/admin/invoices/route.ts` | GET/POST — admin lists and generates commission invoices. POST selects `created_at` (not `pickup_at`) from `partner_bookings`. |
-| `app/api/admin/accounts/[id]/route.ts` | GET/PATCH — admin account detail. PATCH supports `commission_rate` and `default_currency` updates. |
-| `app/api/internal/complete-booking/route.ts` | Internal route — called from camel-customer when booking reaches completed. Protected by CRON_SECRET. Calls completeBooking(). |
-| `app/admin/reports/page.tsx` | Admin reports — commission invoices section with partner dropdown + month dropdown (starts from current month). |
-| `app/admin/accounts/[id]/page.tsx` | Admin account detail — includes Billing Currency Override section (admin only). |
-| `app/partner/reports/page.tsx` | Partner reports — bookings, per-currency summary, Excel export, Commission Invoices section with month dropdown (current month included). |
-| `app/partner/signup/page.tsx` | Partner signup — 5 steps, mobile responsive stepper. Imports `downloadPartnerTermsPDF` from `lib/portal/partnerTerms.ts`. |
-| `app/partner/terms/page.tsx` | Partner T&Cs page — imports all content from `lib/portal/partnerTerms.ts` |
-| `app/partner/onboarding/page.tsx` | Partner onboarding — 7 steps. Mobile responsive. Stripe refresh status calls `onRefreshProfile` after checking. Card padding `p-4 sm:p-8`. |
-| `app/partner/layout.tsx` | Partner layout — auth guard + **approval check**: unapproved partners redirected to `application-submitted` page. Only dashboard, account, profile and info pages accessible before approval. |
-| `app/partner/application-submitted/page.tsx` | Status-aware page — shows "Under Review", "Rejected", or "Thank you" depending on logged-in state. |
-| `app/partner/dashboard/page.tsx` | Partner dashboard — all cards full width on mobile (`grid-cols-1` explicit). |
-| `app/components/Footer.tsx` | Portal footer — `PortalFooter` (partner/admin), `DriverFooter`, `CustomerFooter`. Copyright bar is single line `text-xs` to avoid mobile overflow. |
-| `app/cron/monthly-payout/route.ts` | Monthly payout cron — runs 1st of month. Uses `created_at` (not `pickup_at`). |
-| `next.config.ts` | CSP headers including `form-action 'self'` — blocks redirect to fake payment pages. |
+| `lib/i18n/LanguageContext.tsx` | Language context + provider + localStorage + browser locale detection |
+| `lib/i18n/useTranslation.ts` | `t()` hook — dot-notation keys, `{{var}}` interpolation, English fallback |
+| `lib/i18n/LanguageToggle.tsx` | EN \| ES toggle component — drop into any header |
+| `lib/i18n/locales/en.json` | English strings — all translated pages |
+| `lib/i18n/locales/es.json` | Spanish strings — all translated pages |
 
 ### Key Libraries & Files — Customer (`~/camel-customer`)
 | File | Purpose |
@@ -111,13 +98,128 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | `lib/supabase-customer/server.ts` | Exports `createCustomerServerClient()` and `createCustomerServiceRoleSupabaseClient()` |
 | `lib/portal/generateBookingReceiptPDF.tsx` | Booking confirmation receipt PDF |
 | `lib/portal/generateCompletionStatementPDF.tsx` | Booking completion statement PDF |
-| `app/api/test-booking/bookings/[id]/update/route.ts` | POST — customer confirms fuel/insurance. Triggers portal internal route on completion. |
-| `app/api/payments/create-intent/route.ts` | Creates Stripe payment intent in partner's bid currency |
-| `app/api/webhooks/stripe/route.ts` | Customer webhook — creates booking, generates receipt PDF, sends confirmation emails |
-| `app/api/chat/route.ts` | Customer AI chat — scoped to logged-in customer's bookings only via `customer_user_id` filter |
-| `app/components/Footer.tsx` | Customer footer only — copyright bar single line `text-xs`. |
-| `app/page.tsx` | Customer homepage — react-datepicker, useIsDesktop hook |
-| `next.config.ts` | CSP headers including `form-action 'self' https://checkout.stripe.com https://*.stripe.com` |
+
+---
+
+## i18n Architecture (CRITICAL)
+
+### How it works
+- All user-facing strings live in `lib/i18n/locales/en.json` and `lib/i18n/locales/es.json`
+- `useTranslation()` hook returns the right string based on current locale
+- Language preference stored in `localStorage` key `camel_locale`
+- Browser locale auto-detected on first visit: `es*` → Spanish, `en*` → English, anything else → English
+- `LanguageProvider` wraps the entire app via `app/ClientRootLayout.tsx`
+- `LanguageToggle` component renders EN | ES buttons — active locale highlighted in orange
+
+### Translation file key structure
+Keys use dot notation grouped by page/feature:
+- `common.*` — shared strings
+- `nav.*` — navigation labels
+- `home.*` — portal homepage
+- `signup.*` — partner signup
+- `login.*` — partner login
+- `onboarding.*` — partner onboarding
+- `dashboard.*` — partner dashboard
+- `account.*` — partner account
+- `profile.*` — partner profile
+- `bookings.*` — partner bookings list + detail
+- `requests.*` — partner requests list + detail
+- `reports.*` — partner reports
+- `fleet.*` — partner fleet
+- `drivers.*` — partner drivers
+- `reviews.*` — partner reviews
+- `settings.*` — partner settings
+- `suggestions.*` — partner suggestions
+- `terms.*` — partner terms page UI
+- `rules.*` — operating rules page UI
+- `about.*` — about page
+- `privacy.*` — privacy policy page
+- `cookies.*` — cookie policy page
+- `contact.*` — contact page
+- `footer.*` — portal footer
+- `driver.*` — all driver portal pages
+- `booking.status.*` — booking status labels
+
+### Adding a new language (future)
+1. Create `lib/i18n/locales/it.json` (or `pt`, `fr`, `de`)
+2. Add the locale code to `LanguageContext.tsx` `Locale` type and `detectLocale()` logic
+3. Add button to `LanguageToggle.tsx`
+4. No other code changes needed — `useTranslation` falls back to English for any missing key
+
+---
+
+## i18n Translation Status — camel-portal
+
+### ✅ Phase 1 — Partner portal core (Complete)
+| Page/Component | File |
+|---------------|------|
+| Portal homepage | `app/page.tsx` + `app/HomePageContent.tsx` |
+| Partner signup (all 5 steps) | `app/partner/signup/page.tsx` |
+| Partner onboarding (all 7 steps) | `app/partner/onboarding/page.tsx` |
+| Partner dashboard | `app/partner/dashboard/page.tsx` |
+| Portal sidebar | `app/components/portal/PortalSidebar.tsx` |
+| Portal topbar | `app/components/portal/PortalTopbar.tsx` |
+| Partner login + forgot password | `app/partner/login/page.tsx` |
+| Application submitted | `app/partner/application-submitted/page.tsx` |
+| Reset password | `app/partner/reset-password/page.tsx` |
+
+### ✅ Phase 2 — Partner portal remaining pages (Complete)
+| Page/Component | File |
+|---------------|------|
+| Partner account | `app/partner/account/page.tsx` |
+| Partner profile | `app/partner/profile/page.tsx` |
+| Partner bookings list | `app/partner/bookings/page.tsx` |
+| Partner booking detail | `app/partner/bookings/[id]/page.tsx` |
+| Partner requests list | `app/partner/requests/page.tsx` |
+| Partner request detail | `app/partner/requests/[id]/page.tsx` |
+| Partner reports | `app/partner/reports/page.tsx` |
+| Partner fleet | `app/partner/fleet/page.tsx` |
+| Partner drivers | `app/partner/drivers/page.tsx` |
+| Partner reviews | `app/partner/reviews/page.tsx` |
+| Partner settings | `app/partner/settings/page.tsx` |
+| Partner suggestions | `app/partner/suggestions/page.tsx` |
+| Partner terms page | `app/partner/terms/page.tsx` |
+| Partner operating rules | `app/partner/operating-rules/page.tsx` |
+| Partner about | `app/partner/about/page.tsx` |
+| Partner contact | `app/partner/contact/page.tsx` |
+| Partner privacy | `app/partner/privacy/page.tsx` |
+| Partner cookies | `app/partner/cookies/page.tsx` |
+| Portal footer | `app/components/Footer.tsx` |
+
+### ✅ Phase 3 — Driver portal (Complete)
+| Page/Component | File |
+|---------------|------|
+| Driver login + forgot password | `app/driver/login/page.tsx` |
+| Driver signup | `app/driver/signup/page.tsx` |
+| Driver reset password | `app/driver/reset-password/page.tsx` |
+| Driver jobs | `app/driver/jobs/page.tsx` |
+
+### ❌ Phase 4 — Partner emails + PDFs (Next priority)
+| Item | File | Notes |
+|------|------|-------|
+| Partner-facing emails | `lib/email.ts` | All partner notification content |
+| Partner T&Cs PDF content | `lib/portal/partnerTerms.ts` | Legal — review Spanish before publishing |
+| Operating rules PDF content | `lib/portal/operatingRules.ts` | Legal — review Spanish before publishing |
+| Commission invoice PDF | `lib/portal/generateCommissionInvoice.tsx` | **Keep English** — NTUK is a UK company |
+
+### ❌ Phase 5 — Customer site (Pending)
+All customer-facing pages, emails, booking receipt PDF, completion statement PDF.
+
+### ❌ Phase 6 — Future languages (Future)
+IT, PT, FR, DE — add a new JSON file, zero code changes needed.
+
+---
+
+## Translation Roadmap
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **Phase 1 — Partner portal core** | Homepage, signup, onboarding, dashboard, sidebar, login, auth pages | ✅ Done |
+| **Phase 2 — Partner portal remaining** | Account, profile, bookings, requests, reports, fleet, drivers, reviews, settings, suggestions, all legal/info pages, footer | ✅ Done |
+| **Phase 3 — Driver portal** | Login, signup, reset password, jobs | ✅ Done |
+| **Phase 4 — Partner emails + PDFs** | `lib/email.ts`, `partnerTerms.ts`, `operatingRules.ts` | 🔴 Next |
+| **Phase 5 — Customer site** | All customer pages, emails, PDFs | 🔲 Pending |
+| **Phase 6 — Future languages** | IT, PT, FR, DE | 🔲 Future |
 
 ---
 
@@ -180,6 +282,7 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 - **Partner download:** `/partner/reports` — month dropdown from current month back 24 months
 - **Admin generate:** `/admin/reports` — partner dropdown + month dropdown
 - **Manual trigger:** `curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://portal.camel-global.com/api/cron/monthly-payout`
+- **Commission invoices stay in English** — NTUK is a UK company
 
 ---
 
@@ -205,7 +308,7 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 - **GitHub branch protection** — `main` branch requires PR, Repository admin bypass
 - **Vercel notifications** — email on deployment ready and failures
 - **Rotate `STRIPE_SECRET_KEY`** every 6-12 months in both Vercel projects
-- **Pending:** Vercel 2FA (`https://vercel.com/~/security`), GitHub 2FA, Supabase 2FA, Gmail 2FA
+- **2FA:** Vercel, GitHub, Supabase, Gmail — all done ✅
 
 ---
 
@@ -252,6 +355,9 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 | `v-stable-chat38-pre-spanish` | Chat 38 — completion email, logo on PDFs, currency locked at onboarding |
 | `v-stable-chat39-testing` | Chat 39 mid — testing phase checkpoint |
 | `v-stable-chat39-complete` | Chat 39 complete — testing done, security hardened, ready for Spanish translation |
+| `v-stable-chat39-pre-i18n` | Chat 39 — stable before i18n infrastructure added |
+| `v-stable-chat39-i18n-partner-signup-onboarding` | Chat 39 — partner portal i18n Phase 1 complete |
+| `v-stable-chat40-i18n-complete` | Chat 40 — full partner portal + driver portal i18n EN/ES complete |
 
 ### Customer (`~/camel-customer`)
 | Tag | Description |
@@ -263,7 +369,7 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 
 ### Rollback
 ```bash
-cd ~/camel-portal && git checkout v-stable-chat39-complete
+cd ~/camel-portal && git checkout v-stable-chat40-i18n-complete
 cd ~/camel-customer && git checkout v-stable-chat39-complete
 ```
 
@@ -296,26 +402,52 @@ cd ~/camel-customer && git checkout v-stable-chat39-complete
 - Application-submitted page — status-aware (pending/rejected/guest)
 - Mobile layout — all pages fit correctly on mobile
 - Footer copyright — single line, no overflow on mobile
-- Security — CSP form-action, Stripe Radar, Stripe 2FA, GitHub branch protection, Vercel notifications
+- Security — CSP form-action, Stripe Radar, Stripe 2FA, GitHub branch protection, Vercel notifications, all 2FA done
 - Chat widget — scoped to logged-in user's data only (both customer and partner)
+- **i18n infrastructure** — LanguageContext, useTranslation, LanguageToggle, EN/ES JSON files
+- **Partner portal fully translated EN/ES** — all pages including legal, about, contact, footer
+- **Driver portal fully translated EN/ES** — login, signup, reset password, jobs
 
 ---
 
-## What Needs Building in Chat 40
+## What Needs Building — Next Chat (Chat 41)
 
-### 1. Spanish Translation (PRIORITY)
-- All user-facing strings in camel-customer and camel-portal
-- Language toggle (EN / ES) — remember preference in localStorage
-- Do customer site first, then portal
+### 🔴 Priority 1 — Phase 4: Partner emails (EN/ES)
+Translate all partner-facing email content in `lib/email.ts`. This is the main remaining i18n gap — partners in Spain receive English emails. Approach: add a `locale` parameter to each email send function and render strings conditionally or from a lookup object.
 
----
+Key emails to translate:
+- Application received confirmation
+- Account approved notification
+- New booking confirmed (to partner)
+- Booking cancelled (to partner)
+- Commission invoice email
+- Completion notification (to partner)
+- Review reminder (to partner)
 
-## What Still Needs Building (Lower Priority)
+### 🔴 Priority 2 — Phase 4: Legal PDF content (EN/ES)
+- `lib/portal/partnerTerms.ts` — Spanish T&Cs for the downloadable PDF. **Requires legal review before publishing.** The page UI is already translated; only the PDF download content needs Spanish.
+- `lib/portal/operatingRules.ts` — same situation. Page UI translated, PDF content still English only.
+
+### 🟡 Priority 3 — Phase 5: Customer site translation
+All customer-facing pages in `camel-customer`. Start by running the file tree and identifying all `app/` pages. Key pages:
+- Homepage (`app/page.tsx`)
+- Book (`app/book/page.tsx`)
+- Bookings list + detail (`app/bookings/`)
+- Account (`app/account/page.tsx`)
+- Login / signup / reset password
+- Checkout (`app/checkout/`)
+- About / contact / privacy / cookies / terms
+
+### 🟡 Priority 4 — Customer emails + PDFs
+- `lib/email.ts` in `camel-customer` — customer-facing email content
+- `lib/portal/generateBookingReceiptPDF.tsx` — booking receipt (keep EN for NTUK invoicing)
+- `lib/portal/generateCompletionStatementPDF.tsx` — completion statement
+
+### 🔲 Lower priority (deferred)
 - Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
-- Xero monthly commission endpoint — deferred
-- DAC7 EU platform reporting — deferred
+- Xero monthly commission endpoint
+- DAC7 EU platform reporting
 - Outreach: set up `e.camel-global.com` subdomain in Resend
-- 2FA: Vercel personal (`https://vercel.com/~/security`), GitHub, Supabase, Gmail
 
 ---
 
@@ -328,33 +460,46 @@ A collaborator works on `camel-portal` from Windows (`C:/dev/camel-portal`). He 
 
 ## Session Log
 
+### Chat 40 (Completed)
+**i18n Phases 2 & 3 — full partner portal + driver portal translation EN/ES**
+
+Pages translated:
+1. `app/partner/account/page.tsx`
+2. `app/partner/profile/page.tsx`
+3. `app/partner/bookings/page.tsx`
+4. `app/partner/bookings/[id]/page.tsx`
+5. `app/partner/requests/page.tsx`
+6. `app/partner/requests/[id]/page.tsx`
+7. `app/partner/reports/page.tsx`
+8. `app/partner/fleet/page.tsx`
+9. `app/partner/drivers/page.tsx`
+10. `app/partner/reviews/page.tsx`
+11. `app/partner/settings/page.tsx`
+12. `app/partner/suggestions/page.tsx`
+13. `app/partner/terms/page.tsx`
+14. `app/partner/operating-rules/page.tsx`
+15. `app/partner/about/page.tsx`
+16. `app/partner/contact/page.tsx`
+17. `app/partner/privacy/page.tsx`
+18. `app/partner/cookies/page.tsx`
+19. `app/components/Footer.tsx` (portal — PortalFooter + DriverFooter translated; CustomerFooter stays EN for Phase 5)
+20. `app/driver/login/page.tsx`
+21. `app/driver/signup/page.tsx`
+22. `app/driver/reset-password/page.tsx`
+23. `app/driver/jobs/page.tsx`
+24. `lib/i18n/locales/en.json` — all new keys added (account, profile, bookings, requests, reports, fleet, drivers, reviews, settings, suggestions, terms, rules, about, privacy, cookies, contact, footer, driver)
+25. `lib/i18n/locales/es.json` — all Spanish translations added
+26. Stable tag: `v-stable-chat40-i18n-complete`
+
+Note: `lib/email.ts` partner email content, `partnerTerms.ts` PDF content, and `operatingRules.ts` PDF content remain English-only — deferred to Phase 4 (Chat 41).
+
 ### Chat 39 (Completed)
-**Testing, bug fixes, mobile fixes, security hardening**
+**Testing, bug fixes, mobile fixes, security hardening, i18n Phase 1**
 
 1. `lib/portal/partnerTerms.ts` — single source of truth for partner T&Cs
-2. `app/partner/signup/page.tsx` — terms import, mobile stepper fix, padding fix
-3. `app/partner/terms/page.tsx` — imports from shared lib
-4. `app/partner/reports/page.tsx` — Commission Invoices section, month dropdown
-5. `app/admin/reports/page.tsx` — invoice month dropdown fix, starts from current month
-6. `lib/portal/generateCommissionInvoice.tsx` — date column, cancelled bookings shown, `created_at` fix
-7. `app/api/partner/invoices/generate/route.ts` — `created_at` fix
-8. `app/api/admin/invoices/route.ts` — `created_at` fix
-9. `app/cron/monthly-payout/route.ts` — `created_at` fix
-10. `app/api/admin/accounts/[id]/route.ts` — PATCH supports `default_currency`
-11. `app/admin/accounts/[id]/page.tsx` — Billing Currency Override section
-12. `app/partner/layout.tsx` — approval gate blocks unapproved partners
-13. `app/partner/application-submitted/page.tsx` — status-aware messaging
-14. `app/partner/dashboard/page.tsx` — mobile full-width cards fix
-15. `app/partner/onboarding/page.tsx` — mobile width fix, Stripe refresh status fix
-16. `app/components/Footer.tsx` (portal) — single-line copyright, no mobile overflow
-17. `app/components/Footer.tsx` (customer) — single-line copyright
-18. `next.config.ts` (portal) — `form-action 'self'` CSP directive
-19. `next.config.ts` (customer) — `form-action` with Stripe domains
-20. `NEXT_PUBLIC_SITE_URL` — set in camel-customer Vercel to fix review email links
-21. Stripe Radar rules enabled — highest risk block, CVC block, 3DS request
-22. GitHub branch protection — main branch, Repository admin bypass
-23. Vercel deployment notifications — email on deployment ready
-24. Stable tags: `v-stable-chat39-complete` (both repos)
+2–24. Various bug fixes, security hardening, mobile layout fixes
+25–41. i18n infrastructure + Phase 1: homepage, signup, onboarding, dashboard, sidebar, topbar, login, application-submitted, reset-password
+42. Stable tags: `v-stable-chat39-pre-i18n`, `v-stable-chat39-i18n-partner-signup-onboarding`
 
 ### Chat 38 (Completed)
 **Completion email, PDF logo, currency architecture fix**
@@ -375,7 +520,8 @@ cd ~/camel-portal && git pull origin main
 cd ~/camel-customer && git pull origin main
 
 # Portal deploy (specific files — avoid submodule issues)
-cd ~/camel-portal && git add path/to/file.tsx && git commit -m "message" && git push origin main
+# IMPORTANT: quote [id] paths in zsh
+cd ~/camel-portal && git add path/to/file.tsx 'app/partner/bookings/[id]/page.tsx' && git commit -m "message" && git push origin main
 
 # Customer deploy
 cd ~/camel-customer && git add app/path/to/file.tsx && git commit -m "message" && git push origin main
@@ -396,4 +542,4 @@ git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 
 ---
 
-*Last updated: Chat 39 complete — testing done, mobile fixes, security hardened (CSP, Stripe Radar, GitHub branch protection), partner approval gate, status-aware application page. Next: Spanish translation.*
+*Last updated: Chat 40 complete — i18n Phases 1, 2 & 3 done. Entire partner portal and driver portal fully translated EN/ES. Next: Phase 4 — partner email translations in `lib/email.ts`, then legal PDF content in `partnerTerms.ts` and `operatingRules.ts`, then Phase 5 customer site.*
