@@ -362,5 +362,9 @@
   "sport.bikes1": "Bicis — 1",
   "sport.bikes2": "Bicis — 2",
   "sport.bikes3": "Bicis — 3+",
-  "sport.other": "Otro equipamiento voluminoso"
+  "sport.other": "Otro equipamiento voluminoso",
+"login.welcomeBack": "Bienvenido de nuevo.",
+  "login.emailPlaceholder": "tu@correo.com",
+  "login.resetSubtitle": "Te enviaremos un enlace para restablecer tu contraseña.",
+  "login.resetSent": "Correo de restablecimiento enviado ✓"
 }
