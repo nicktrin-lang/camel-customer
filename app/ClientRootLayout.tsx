@@ -9,18 +9,47 @@ import CookieBanner from "@/app/components/CookieBanner";
 import Footer from "@/app/components/Footer";
 import GoogleAnalyticsPageView from "@/app/components/GoogleAnalytics";
 import ChatWidget from "@/app/components/ChatWidget";
+import { LanguageProvider, useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
-export default function ClientRootLayout({
+// Compact toggle — same pattern as portal/driver
+function CompactLanguageToggle() {
+  const { locale, setLocale } = useLanguage();
+  const options: { code: Locale; label: string }[] = [
+    { code: "en", label: "EN" },
+    { code: "es", label: "ES" },
+  ];
+  return (
+    <div className="flex items-center gap-0 border border-white/20 overflow-hidden">
+      {options.map(({ code, label }, i) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLocale(code)}
+          className={[
+            "px-2 py-1.5 text-xs font-black transition-colors",
+            i < options.length - 1 ? "border-r border-white/20" : "",
+            locale === code
+              ? "bg-[#ff7a00] text-white"
+              : "text-white/60 hover:bg-white/10 hover:text-white",
+          ].join(" ")}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function InnerLayout({
   children,
-  fontClass,
 }: {
   children: React.ReactNode;
-  fontClass?: string;
 }) {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   const isHomepage = pathname === "/";
-
   const isNewCustomerArea =
     pathname?.startsWith("/bookings") ||
     pathname?.startsWith("/book") ||
@@ -28,12 +57,8 @@ export default function ClientRootLayout({
     pathname === "/signup" ||
     pathname === "/account" ||
     pathname === "/reset-password";
-
-  // Checkout has its own full-page nav — suppress global header only here
   const isCheckoutPage = pathname?.startsWith("/checkout");
-
   const isTestBookingArea = pathname?.startsWith("/test-booking");
-
   const isCustomerPublicPage =
     pathname === "/about" ||
     pathname === "/contact" ||
@@ -43,7 +68,6 @@ export default function ClientRootLayout({
 
   const showCurrencyInHeader = false;
   const isComingSoonPage = pathname === "/coming-soon";
-
   const showGlobalHeader = !isHomepage && !isComingSoonPage;
 
   const [isCustomerLoggedIn, setIsCustomerLoggedIn] = useState(false);
@@ -124,22 +148,23 @@ export default function ClientRootLayout({
               <Link href="/" className="flex items-center">
                 <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
               </Link>
-              <nav className="flex items-center gap-4">
+              <nav className="flex items-center gap-3">
                 {showCurrencyInHeader && (
                   <div className="hidden sm:block"><CurrencySelector /></div>
                 )}
+                <CompactLanguageToggle />
                 {isCustomerLoggedIn ? (
                   <>
-                    <Link href={newBookingHref} className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">New Booking</Link>
-                    <Link href={bookingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">My Bookings</Link>
-                    <Link href={settingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">Account</Link>
-                    {customerName && <span className="hidden text-sm font-bold text-white lg:block">Hi, {customerName}</span>}
-                    <button type="button" onClick={handleCustomerLogout} className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">Logout</button>
+                    <Link href={newBookingHref} className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
+                    <Link href={bookingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">{t("common.myBookings")}</Link>
+                    <Link href={settingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">{t("common.account")}</Link>
+                    {customerName && <span className="hidden text-sm font-bold text-white lg:block">{t("common.hi", { name: customerName })}</span>}
+                    <button type="button" onClick={handleCustomerLogout} className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logout")}</button>
                   </>
                 ) : (
                   <>
-                    <Link href={signupHref} className="hidden text-sm font-bold text-white hover:underline sm:block">Sign Up</Link>
-                    <Link href={loginHref}  className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">Log In</Link>
+                    <Link href={signupHref} className="hidden text-sm font-bold text-white hover:underline sm:block">{t("nav.signUp")}</Link>
+                    <Link href={loginHref}  className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("nav.logIn")}</Link>
                   </>
                 )}
               </nav>
@@ -157,5 +182,19 @@ export default function ClientRootLayout({
         <ChatWidget getToken={getToken} apiPath="/api/chat" />
       )}
     </>
+  );
+}
+
+export default function ClientRootLayout({
+  children,
+  fontClass,
+}: {
+  children: React.ReactNode;
+  fontClass?: string;
+}) {
+  return (
+    <LanguageProvider>
+      <InnerLayout>{children}</InnerLayout>
+    </LanguageProvider>
   );
 }
