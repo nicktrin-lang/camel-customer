@@ -7,6 +7,7 @@ import Link from "next/link";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -27,7 +28,6 @@ function fmtCurr(amount: number, currency: string) {
   return new Intl.NumberFormat(LOCALE_MAP[curr] || "en-GB", { style: "currency", currency: curr }).format(amount);
 }
 
-// ── Inner payment form ─────────────────────────────────────────────────────────
 function CheckoutForm({ intent, requestId, onError }: {
   intent: IntentData;
   requestId: string;
@@ -36,6 +36,7 @@ function CheckoutForm({ intent, requestId, onError }: {
   const stripe   = useStripe();
   const elements = useElements();
   const router   = useRouter();
+  const { t }    = useTranslation();
   const [paying,  setPaying]  = useState(false);
   const [formErr, setFormErr] = useState("");
   const [ready,   setReady]   = useState(false);
@@ -73,18 +74,18 @@ function CheckoutForm({ intent, requestId, onError }: {
     <div className="space-y-6">
       {/* Order summary */}
       <div className="bg-[#f0f0f0] p-5 space-y-3">
-        <p className="text-xs font-black uppercase tracking-widest text-black">Order Summary</p>
+        <p className="text-xs font-black uppercase tracking-widest text-black">{t("checkout.summary")}</p>
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-black/60">Car hire — {intent.partner_name}</span>
+            <span className="font-bold text-black/60">{t("checkout.hirePriceLabel")} — {intent.partner_name}</span>
             <span className="font-black text-black">{fmtCurr(intent.amount_car_hire, curr)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-black/60">Full tank deposit <span className="text-black/40">(refundable)</span></span>
+            <span className="font-bold text-black/60">{t("checkout.fuelDepositLabel")} <span className="text-black/40">(refundable)</span></span>
             <span className="font-black text-black">{fmtCurr(intent.amount_fuel, curr)}</span>
           </div>
           <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2">
-            <span className="text-black">Total</span>
+            <span className="text-black">{t("checkout.total")}</span>
             <span className="text-black text-lg">{fmtCurr(intent.amount_total, curr)}</span>
           </div>
         </div>
@@ -105,7 +106,7 @@ function CheckoutForm({ intent, requestId, onError }: {
       {!ready && (
         <div className="flex items-center gap-2 text-sm font-bold text-black/40">
           <div className="h-4 w-4 rounded-full border-2 border-[#ff7a00] border-t-transparent animate-spin" />
-          Loading payment form…
+          {t("common.loading")}
         </div>
       )}
 
@@ -121,7 +122,7 @@ function CheckoutForm({ intent, requestId, onError }: {
         disabled={!stripe || !elements || !ready || paying}
         className="w-full bg-[#ff7a00] py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
       >
-        {paying ? "Processing payment…" : `Pay ${fmtCurr(intent.amount_total, curr)}`}
+        {paying ? t("checkout.processing") : `${t("checkout.payNow")} ${fmtCurr(intent.amount_total, curr)}`}
       </button>
 
       <p className="text-xs font-bold text-black/40 text-center">
@@ -131,10 +132,10 @@ function CheckoutForm({ intent, requestId, onError }: {
   );
 }
 
-// ── Main checkout page ─────────────────────────────────────────────────────────
 export default function CheckoutPage({ params }: { params: Promise<{ bid_id: string }> }) {
   const router   = useRouter();
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
+  const { t }    = useTranslation();
 
   const [bidId,     setBidId]     = useState("");
   const [requestId, setRequestId] = useState("");
@@ -142,13 +143,10 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState("");
 
-  // Resolve params
   useEffect(() => { params.then(p => setBidId(p.bid_id)); }, [params]);
 
   useEffect(() => {
     if (!bidId) return;
-
-    // Read requestId from sessionStorage immediately — set before redirecting to checkout
     const storedRequestId = sessionStorage.getItem(`request_for_bid_${bidId}`) || "";
     if (storedRequestId) setRequestId(storedRequestId);
 
@@ -158,24 +156,20 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
         router.replace(`/login?next=/checkout/${bidId}`);
         return;
       }
-
       const res = await fetch("/api/payments/create-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({ bid_id: bidId }),
       });
       const json = await res.json().catch(() => null);
-
       if (!res.ok) {
         setError(json?.error || "Failed to initialise payment.");
         setLoading(false);
         return;
       }
-
       setIntent(json);
       setLoading(false);
     }
-
     init();
   }, [bidId, supabase, router]);
 
@@ -204,7 +198,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
           <p className="text-sm font-bold text-black/60">{error}</p>
           <button onClick={() => router.back()}
             className="w-full border border-black/20 py-3 text-sm font-black text-black hover:bg-black/5">
-            ← Go back
+            ← {t("common.back")}
           </button>
         </div>
       </div>
@@ -213,26 +207,20 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
 
   if (!intent) return null;
 
-  const curr = intent.currency.toUpperCase();
-
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Nav */}
       <nav className="w-full bg-black px-4 py-2.5 flex items-center justify-between">
         <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
-        <Link href="/bookings" className="text-sm font-black text-white/60 hover:text-white">My Bookings</Link>
+        <Link href="/bookings" className="text-sm font-black text-white/60 hover:text-white">{t("common.myBookings")}</Link>
       </nav>
 
-      {/* Hero */}
       <div className="w-full bg-black px-6 py-12 text-white">
         <div className="mx-auto max-w-2xl">
           <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-2">Secure Checkout</p>
-          <h1 className="text-3xl font-black">Complete your booking</h1>
-
+          <h1 className="text-3xl font-black">{t("checkout.title")}</h1>
         </div>
       </div>
 
-      {/* Form */}
       <div className="flex-1 bg-[#f0f0f0] px-6 py-10">
         <div className="mx-auto max-w-2xl">
           <div className="bg-white p-8">
@@ -251,11 +239,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
                 },
               }}
             >
-              <CheckoutForm
-                intent={intent}
-                requestId={requestId}
-                onError={setError}
-              />
+              <CheckoutForm intent={intent} requestId={requestId} onError={setError} />
             </Elements>
           </div>
         </div>
