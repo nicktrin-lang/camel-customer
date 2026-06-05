@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 const STORAGE_KEY = "cookie_consent";
 
@@ -16,6 +17,7 @@ export function getCookieConsent(): CookieConsent {
 
 export default function CookieBanner() {
   const [visible, setVisible] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const consent = getCookieConsent();
@@ -46,13 +48,9 @@ export default function CookieBanner() {
     >
       <div className="mx-auto flex max-w-7xl flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-8">
         <p className="flex-1 text-sm font-semibold text-white/70 leading-relaxed">
-          We use cookies to improve your experience and analyse site usage.{" "}
+          {t("cookie.message")}{" "}
           <Link href="/cookies" className="font-black text-white underline underline-offset-2 hover:text-[#ff7a00] transition-colors">
-            Cookie Policy
-          </Link>{" "}
-          &amp;{" "}
-          <Link href="/privacy" className="font-black text-white underline underline-offset-2 hover:text-[#ff7a00] transition-colors">
-            Privacy Policy
+            {t("cookie.policy")}
           </Link>
           .
         </p>
@@ -61,13 +59,13 @@ export default function CookieBanner() {
             onClick={reject}
             className="border border-white/20 bg-white/5 px-5 py-2.5 text-xs font-black text-white hover:bg-white/10 transition-colors"
           >
-            Reject Non-Essential
+            {t("cookie.decline")}
           </button>
           <button
             onClick={accept}
             className="bg-[#ff7a00] px-5 py-2.5 text-xs font-black text-white hover:opacity-90 transition-opacity"
           >
-            Accept All
+            {t("cookie.accept")}
           </button>
         </div>
       </div>
