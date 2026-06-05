@@ -34,10 +34,10 @@ function useStatusLabel() {
     switch (s) {
       case "open":      return t("bookings.status.pending");
       case "confirmed": case "driver_assigned": case "en_route": case "arrived": return t("bookings.status.confirmed");
-      case "collected": case "returned": return "On Hire";
+      case "collected": case "returned": return t("bookings.status.onHire");
       case "completed": return t("bookings.status.completed");
       case "cancelled": return t("bookings.status.cancelled");
-      case "expired":   return "Expired";
+      case "expired":   return t("bookings.status.expired");
       default: return s.replaceAll("_", " ");
     }
   };
@@ -80,10 +80,10 @@ export default function BookingsPage() {
   const cancelled = rows.filter(r => r.status === "cancelled");
 
   const tabs = [
-    { key: "active",    label: "Active",    count: active.length,    items: active,    bar: "bg-[#ff7a00]" },
-    { key: "completed", label: t("bookings.status.completed"), count: completed.length, items: completed, bar: "bg-green-500" },
-    { key: "cancelled", label: t("bookings.status.cancelled"), count: cancelled.length, items: cancelled, bar: "bg-red-500" },
-    { key: "all",       label: "All",       count: rows.length,      items: rows,      bar: "bg-black" },
+    { key: "active",    label: t("bookings.tab.active"),         count: active.length,    items: active,    bar: "bg-[#ff7a00]" },
+    { key: "completed", label: t("bookings.status.completed"),   count: completed.length, items: completed, bar: "bg-green-500" },
+    { key: "cancelled", label: t("bookings.status.cancelled"),   count: cancelled.length, items: cancelled, bar: "bg-red-500" },
+    { key: "all",       label: t("bookings.tab.all"),            count: rows.length,      items: rows,      bar: "bg-black" },
   ];
 
   const currentTab = tabs.find(tab => tab.key === activeTab) ?? tabs[0];
@@ -95,7 +95,7 @@ export default function BookingsPage() {
         <div className="mx-auto max-w-5xl">
           <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">{t("common.account")}</p>
           <h1 className="text-4xl font-black text-white md:text-5xl">{t("bookings.title")}</h1>
-          <p className="mt-3 text-base font-semibold text-white/70">Track your car hire requests and bookings.</p>
+          <p className="mt-3 text-base font-semibold text-white/70">{t("bookings.subtitle")}</p>
         </div>
       </div>
 
@@ -129,9 +129,7 @@ export default function BookingsPage() {
             <div className="bg-[#f0f0f0] p-12 text-center">
               <p className="text-4xl mb-4">🚗</p>
               <h2 className="text-2xl font-black text-black mb-2">{t("bookings.empty")}</h2>
-              <p className="text-base font-semibold text-black/50 mb-6">
-                Create your first car hire request and receive bids from local car hire companies.
-              </p>
+              <p className="text-base font-semibold text-black/50 mb-6">{t("bookings.empty.subtitle")}</p>
               <Link href="/book"
                 className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 transition-opacity">
                 {t("common.bookNow")}
@@ -139,7 +137,7 @@ export default function BookingsPage() {
             </div>
           ) : currentTab.items.length === 0 ? (
             <div className="bg-[#f0f0f0] p-10 text-center">
-              <p className="text-base font-semibold text-black/50">No {currentTab.label.toLowerCase()} bookings.</p>
+              <p className="text-base font-semibold text-black/50">{t("bookings.noTabBookings", { label: currentTab.label.toLowerCase() })}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -161,7 +159,7 @@ export default function BookingsPage() {
                       <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-black/40">
                         <span>🗓 {r.pickup_at ? new Date(r.pickup_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
                         {r.vehicle_category_name && <span>🚗 {r.vehicle_category_name}</span>}
-                        <span>Created {new Date(r.created_at).toLocaleDateString("en-GB")}</span>
+                        <span>{t("bookings.created")} {new Date(r.created_at).toLocaleDateString("en-GB")}</span>
                       </div>
                     </div>
                     <span className="text-black font-black text-lg">→</span>

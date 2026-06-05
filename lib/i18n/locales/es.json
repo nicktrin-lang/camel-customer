@@ -171,6 +171,14 @@
   "reset.success": "Contraseña actualizada. Ya puedes iniciar sesión.",
 
   "bookings.title": "Mis reservas",
+  "bookings.subtitle": "Consulta tus solicitudes de alquiler y reservas.",
+  "bookings.tab.active": "Activas",
+  "bookings.tab.all": "Todas",
+  "bookings.status.onHire": "En alquiler",
+  "bookings.status.expired": "Expirada",
+  "bookings.empty.subtitle": "Crea tu primera solicitud de alquiler y recibe ofertas de empresas locales.",
+  "bookings.created": "Creada",
+  "bookings.noTabBookings": "No hay reservas {{label}}.",
   "bookings.empty": "Todavía no tienes reservas.",
   "bookings.status.pending": "Pendiente",
   "bookings.status.confirmed": "Confirmada",
@@ -362,9 +370,5 @@
   "sport.bikes1": "Bicis — 1",
   "sport.bikes2": "Bicis — 2",
   "sport.bikes3": "Bicis — 3+",
-  "sport.other": "Otro equipamiento voluminoso",
-"login.welcomeBack": "Bienvenido de nuevo.",
-  "login.emailPlaceholder": "tu@correo.com",
-  "login.resetSubtitle": "Te enviaremos un enlace para restablecer tu contraseña.",
-  "login.resetSent": "Correo de restablecimiento enviado ✓"
+  "sport.other": "Otro equipamiento voluminoso"
 }

@@ -148,6 +148,10 @@
   "login.noAccount": "Don't have an account?",
   "login.signUp": "Sign up",
   "login.forgotPassword": "Forgot password?",
+  "login.welcomeBack": "Welcome back.",
+  "login.emailPlaceholder": "your@email.com",
+  "login.resetSubtitle": "We'll send you a link to reset your password.",
+  "login.resetSent": "Reset email sent ✓",
   "login.error.invalid": "Invalid email or password.",
 
   "signup.title": "Create Account",
@@ -167,6 +171,14 @@
   "reset.success": "Password updated. You can now sign in.",
 
   "bookings.title": "My Bookings",
+  "bookings.subtitle": "Track your car hire requests and bookings.",
+  "bookings.tab.active": "Active",
+  "bookings.tab.all": "All",
+  "bookings.status.onHire": "On Hire",
+  "bookings.status.expired": "Expired",
+  "bookings.empty.subtitle": "Create your first car hire request and receive bids from local car hire companies.",
+  "bookings.created": "Created",
+  "bookings.noTabBookings": "No {{label}} bookings.",
   "bookings.empty": "No bookings yet.",
   "bookings.status.pending": "Pending",
   "bookings.status.confirmed": "Confirmed",
@@ -358,9 +370,5 @@
   "sport.bikes1": "Bikes — 1",
   "sport.bikes2": "Bikes — 2",
   "sport.bikes3": "Bikes — 3+",
-  "sport.other": "Other large equipment",
-"login.welcomeBack": "Welcome back.",
-  "login.emailPlaceholder": "your@email.com",
-  "login.resetSubtitle": "We'll send you a link to reset your password.",
-  "login.resetSent": "Reset email sent ✓"
+  "sport.other": "Other large equipment"
 }
