@@ -11,6 +11,8 @@ import { translations } from "./marketing/translations";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
 import { CITIES, DEFAULT_CITY, citiesByCountry, type CityEntry } from "@/lib/cities";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
+import { useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 
 type Lang = keyof typeof translations;
 type AddressResult = {
@@ -23,18 +25,18 @@ type AddressResult = {
 };
 
 const SPORT_OPTIONS = [
-  { value: "none",        label: "None" },
-  { value: "golf_single", label: "Golf clubs — 1 bag" },
-  { value: "golf_two",    label: "Golf clubs — 2 bags" },
-  { value: "golf_three",  label: "Golf clubs — 3 bags" },
-  { value: "golf_four",   label: "Golf clubs — 4+ bags" },
-  { value: "skis_pair",   label: "Skis / snowboard — 1 set" },
-  { value: "skis_two",    label: "Skis / snowboard — 2 sets" },
-  { value: "skis_three",  label: "Skis / snowboard — 3+ sets" },
-  { value: "bikes_one",   label: "Bikes — 1" },
-  { value: "bikes_two",   label: "Bikes — 2" },
-  { value: "bikes_three", label: "Bikes — 3+" },
-  { value: "other",       label: "Other large equipment" },
+  { value: "none",        labelKey: "sport.none" },
+  { value: "golf_single", labelKey: "sport.golf1" },
+  { value: "golf_two",    labelKey: "sport.golf2" },
+  { value: "golf_three",  labelKey: "sport.golf3" },
+  { value: "golf_four",   labelKey: "sport.golf4" },
+  { value: "skis_pair",   labelKey: "sport.skis1" },
+  { value: "skis_two",    labelKey: "sport.skis2" },
+  { value: "skis_three",  labelKey: "sport.skis3" },
+  { value: "bikes_one",   labelKey: "sport.bikes1" },
+  { value: "bikes_two",   labelKey: "sport.bikes2" },
+  { value: "bikes_three", labelKey: "sport.bikes3" },
+  { value: "other",       labelKey: "sport.other" },
 ];
 
 const TYPE_ICON: Record<string, string> = {
@@ -80,15 +82,44 @@ function useIsDesktop() {
   return isDesktop;
 }
 
-// Convert Date to datetime-local string for API
 function toISOLocal(d: Date): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
+}
+
+// Compact language toggle for the homepage nav
+function CompactLanguageToggle() {
+  const { locale, setLocale } = useLanguage();
+  const options: { code: Locale; label: string }[] = [
+    { code: "en", label: "EN" },
+    { code: "es", label: "ES" },
+  ];
+  return (
+    <div className="flex items-center gap-0 border border-white/20 overflow-hidden">
+      {options.map(({ code, label }, i) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLocale(code)}
+          className={[
+            "px-2 py-1.5 text-xs font-black transition-colors",
+            i < options.length - 1 ? "border-r border-white/20" : "",
+            locale === code
+              ? "bg-[#ff7a00] text-white"
+              : "text-white/60 hover:bg-white/10 hover:text-white",
+          ].join(" ")}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function CustomerHome() {
   const router    = useRouter();
   const supabase  = useMemo(() => createCustomerBrowserClient(), []);
   const isDesktop = useIsDesktop();
+  const { t } = useTranslation();
 
   const [city,           setCity]          = useState<CityEntry>(DEFAULT_CITY);
   const [pickupAddress,  setPickupAddress]  = useState("");
@@ -130,8 +161,8 @@ function CustomerHome() {
 
   useEffect(() => {
     if (window.location.hash.includes("access_token")) {
-      const hash   = window.location.hash;
-      const p      = new URLSearchParams(window.location.search);
+      const hash = window.location.hash;
+      const p    = new URLSearchParams(window.location.search);
       const portal = p.get("portal");
       if (portal === "customer")    window.location.replace("/reset-password" + hash);
       else if (portal === "driver") window.location.replace("/driver/reset-password" + hash);
@@ -193,24 +224,24 @@ function CustomerHome() {
 
   async function handleBookNow() {
     setError(null);
-    if (!pickupLat || !pickupLng)   { setError("Please select a pickup address from the suggestions."); return; }
-    if (!dropoffLat || !dropoffLng) { setError("Please select a drop-off address from the suggestions."); return; }
-    if (!pickupDate)                { setError("Please select a pickup date and time."); return; }
-    if (!dropoffDate)               { setError("Please select a drop-off date and time."); return; }
+    if (!pickupLat || !pickupLng)   { setError(t("home.error.pickupAddress")); return; }
+    if (!dropoffLat || !dropoffLng) { setError(t("home.error.dropoffAddress")); return; }
+    if (!pickupDate)                { setError(t("home.error.pickupDate")); return; }
+    if (!dropoffDate)               { setError(t("home.error.dropoffDate")); return; }
     const pickupAt  = toISOLocal(pickupDate);
     const dropoffAt = toISOLocal(dropoffDate);
     const duration  = calculateDurationMinutes(pickupAt, dropoffAt);
-    if (!duration)                  { setError("Drop-off must be at least 1 day after pickup."); return; }
+    if (!duration)                  { setError(t("home.error.duration")); return; }
     const cat = FLEET_CATEGORIES.find(c => c.slug === vehicleSlug);
-    if (!cat)                       { setError("Please select a vehicle category."); return; }
+    if (!cat)                       { setError(t("home.error.vehicleCategory")); return; }
     if (!driverAge || isNaN(driverAgeNum) || driverAgeNum < 21) {
-      setError("Main driver must be 21 or over. Most car hire companies require a minimum age of 21.");
+      setError(t("home.error.mainDriverAge"));
       return;
     }
     for (let i = 0; i < additionalDrivers; i++) {
       const age = Number(additionalDriverAges[i]);
       if (!additionalDriverAges[i] || isNaN(age) || age < 21) {
-        setError(`Additional driver ${i + 1} must be 21 or over.`);
+        setError(t("home.error.additionalDriverAge", { n: String(i + 1) }));
         return;
       }
     }
@@ -238,11 +269,11 @@ function CustomerHome() {
         }),
       });
       const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || "Failed to create booking.");
+      if (!res.ok) throw new Error(json?.error || t("home.error.submitFailed"));
       sessionStorage.removeItem("camel_booking_draft");
       router.push(`/bookings/${json?.data?.id}`);
     } catch (e: any) {
-      setError(e?.message || "Failed to submit booking. Please try again.");
+      setError(e?.message || t("home.error.submitFailed"));
       setSubmitting(false);
     }
   }
@@ -259,7 +290,7 @@ function CustomerHome() {
   const BookNowButton = ({ tall }: { tall?: boolean }) => (
     <button type="button" onClick={handleBookNow} disabled={submitting}
       className={`w-full bg-[#ff7a00] ${tall ? "py-5" : "py-4"} text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity`}>
-      Book Now →
+      {t("common.bookNow")}
     </button>
   );
 
@@ -274,8 +305,8 @@ function CustomerHome() {
         <div className="h-[68px]" />
         <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-[#f0f0f0] px-6 py-20">
           <div className="h-10 w-10 rounded-full border-4 border-[#ff7a00] border-t-transparent animate-spin" />
-          <p className="text-base font-black text-black">Submitting your booking request…</p>
-          <p className="text-sm font-semibold text-black/50">Sending to local car hire partners</p>
+          <p className="text-base font-black text-black">{t("home.submitting")}</p>
+          <p className="text-sm font-semibold text-black/50">{t("home.submitting.sub")}</p>
         </div>
       </div>
     );
@@ -284,7 +315,7 @@ function CustomerHome() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* Datepicker overrides — Camel style */}
+      {/* Datepicker overrides */}
       <style>{`
         .camel-datepicker-wrapper { width: 100%; }
         .camel-datepicker-wrapper .react-datepicker-wrapper { width: 100%; }
@@ -316,13 +347,8 @@ function CustomerHome() {
         }
         .react-datepicker__current-month,
         .react-datepicker-time__header,
-        .react-datepicker__day-name {
-          color: #fff;
-          font-weight: 800;
-        }
-        .react-datepicker__navigation-icon::before {
-          border-color: #fff;
-        }
+        .react-datepicker__day-name { color: #fff; font-weight: 800; }
+        .react-datepicker__navigation-icon::before { border-color: #fff; }
         .react-datepicker__day--selected,
         .react-datepicker__day--keyboard-selected,
         .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item--selected {
@@ -331,20 +357,10 @@ function CustomerHome() {
           border-radius: 0 !important;
           font-weight: 800;
         }
-        .react-datepicker__day:hover {
-          background: #f0f0f0;
-          border-radius: 0;
-        }
-        .react-datepicker__day--today {
-          font-weight: 800;
-          text-decoration: underline;
-        }
-        .react-datepicker__time-container {
-          border-left: 1px solid rgba(0,0,0,0.1);
-        }
-        .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item:hover {
-          background: #f0f0f0;
-        }
+        .react-datepicker__day:hover { background: #f0f0f0; border-radius: 0; }
+        .react-datepicker__day--today { font-weight: 800; text-decoration: underline; }
+        .react-datepicker__time-container { border-left: 1px solid rgba(0,0,0,0.1); }
+        .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item:hover { background: #f0f0f0; }
         .react-datepicker__triangle { display: none; }
       `}</style>
 
@@ -354,8 +370,9 @@ function CustomerHome() {
             <Image src="/camel-logo.png" alt="Camel Global — Meet and Greet Car Hire Spain" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">Log In</Link>
-            <Link href="/signup" className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">Sign Up</Link>
+            <CompactLanguageToggle />
+            <Link href="/login" className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logIn")}</Link>
+            <Link href="/signup" className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.signUp")}</Link>
           </div>
         </div>
       </nav>
@@ -365,16 +382,16 @@ function CustomerHome() {
         <div className="mx-auto max-w-7xl px-4">
           <div className="mb-8">
             <h1 className="text-4xl font-extrabold leading-tight text-black sm:text-5xl lg:text-6xl xl:text-7xl">
-              Meet &amp; Greet Car Hire
+              {t("home.title")}
             </h1>
             <p className="mt-3 text-lg font-semibold text-black/60 sm:text-xl">
-              Your car delivered to you, wherever you are.
+              {t("home.subtitle")}
             </p>
           </div>
 
           <div className="bg-white">
             <p className="text-2xl font-black text-black mb-3 sm:text-3xl lg:text-4xl">
-              Where do you need your car?
+              {t("home.whereTitle")}
             </p>
 
             {error && (
@@ -385,7 +402,7 @@ function CustomerHome() {
 
             {/* City selector */}
             <div className="bg-black px-4 py-3 flex flex-wrap items-center gap-3 mb-3">
-              <span className="text-xs font-black uppercase tracking-widest text-white">Searching near</span>
+              <span className="text-xs font-black uppercase tracking-widest text-white">{t("home.searchingNear")}</span>
               <select
                 value={`${city.country}|${city.city}`}
                 onChange={e => {
@@ -403,17 +420,17 @@ function CustomerHome() {
                   </optgroup>
                 ))}
               </select>
-              <span className="text-xs font-black text-white">Change if your pickup is in a different city</span>
+              <span className="text-xs font-black text-white">{t("home.changeCityHint")}</span>
             </div>
 
             {/* Pickup + dropoff */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-3">
               <div className="relative">
-                <label className={labelCls}>Pickup location</label>
+                <label className={labelCls}>{t("home.pickupLocation")}</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base pointer-events-none">📍</span>
                   <input value={pickupAddress} onChange={e => searchPickup(e.target.value)}
-                    placeholder={`Airport, hotel, address in ${city.city}…`}
+                    placeholder={t("home.pickupPlaceholder", { city: city.city })}
                     className={inputCls + " pl-10"} />
                   {pickupLoading && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-black/30">…</span>}
                 </div>
@@ -428,11 +445,11 @@ function CustomerHome() {
                 )}
               </div>
               <div className="relative">
-                <label className={labelCls}>Drop-off location</label>
+                <label className={labelCls}>{t("home.dropoffLocation")}</label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base pointer-events-none">🏁</span>
                   <input value={dropoffAddress} onChange={e => searchDropoff(e.target.value)}
-                    placeholder="Return location (if different)"
+                    placeholder={t("home.dropoffPlaceholder")}
                     className={inputCls + " pl-10"} />
                   {dropoffLoading && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-black/30">…</span>}
                 </div>
@@ -448,10 +465,10 @@ function CustomerHome() {
               </div>
             </div>
 
-            {/* Dates — react-datepicker with time */}
+            {/* Dates */}
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className={labelCls}>Pickup date &amp; time</label>
+                <label className={labelCls}>{t("home.pickupDateTime")}</label>
                 <div className="camel-datepicker-wrapper">
                   <DatePicker
                     selected={pickupDate}
@@ -460,14 +477,14 @@ function CustomerHome() {
                     timeFormat="HH:mm"
                     timeIntervals={30}
                     dateFormat="dd/MM/yyyy, HH:mm"
-                    placeholderText="Select date & time"
+                    placeholderText={t("home.selectDateTime")}
                     minDate={new Date()}
                     popperPlacement="bottom-start"
                   />
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Drop-off date &amp; time</label>
+                <label className={labelCls}>{t("home.dropoffDateTime")}</label>
                 <div className="camel-datepicker-wrapper">
                   <DatePicker
                     selected={dropoffDate}
@@ -476,7 +493,7 @@ function CustomerHome() {
                     timeFormat="HH:mm"
                     timeIntervals={30}
                     dateFormat="dd/MM/yyyy, HH:mm"
-                    placeholderText="Select date & time"
+                    placeholderText={t("home.selectDateTime")}
                     minDate={pickupDate || new Date()}
                     popperPlacement="bottom-start"
                   />
@@ -487,27 +504,31 @@ function CustomerHome() {
             {/* Passengers + vehicle + sport */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
               <div>
-                <label className={labelCls}>Passengers</label>
+                <label className={labelCls}>{t("home.passengers")}</label>
                 <select value={passengers} onChange={e => setPassengers(Number(e.target.value))} className={selectCls}>
-                  {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} passenger{n>1?"s":""}</option>)}
+                  {[1,2,3,4,5,6,7,8].map(n => (
+                    <option key={n} value={n}>{n} {n > 1 ? t("home.passengers.plural") : t("home.passenger")}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Suitcases</label>
+                <label className={labelCls}>{t("home.suitcases")}</label>
                 <select value={suitcases} onChange={e => setSuitcases(Number(e.target.value))} className={selectCls}>
-                  {[0,1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} suitcase{n!==1?"s":""}</option>)}
+                  {[0,1,2,3,4,5,6].map(n => (
+                    <option key={n} value={n}>{n} {n !== 1 ? t("home.suitcases.plural") : t("home.suitcase")}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Vehicle type</label>
+                <label className={labelCls}>{t("home.vehicleType")}</label>
                 <select value={vehicleSlug} onChange={e => setVehicleSlug(e.target.value)} className={selectCls}>
                   {FLEET_CATEGORIES.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className={labelCls}>Sport equipment</label>
+                <label className={labelCls}>{t("home.sportEquipment")}</label>
                 <select value={sportEquipment} onChange={e => setSportEquipment(e.target.value)} className={selectCls}>
-                  {SPORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  {SPORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
                 </select>
               </div>
             </div>
@@ -515,15 +536,18 @@ function CustomerHome() {
             {/* Driver age row */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 items-start mb-3">
               <div>
-                <label className={labelCls}>Main driver age</label>
+                <label className={labelCls}>{t("home.mainDriverAge")}</label>
                 <input type="number" min={21} max={99} value={driverAge}
                   onChange={e => setDriverAge(e.target.value)}
-                  placeholder="e.g. 35" className={inputCls} />
+                  placeholder={t("home.mainDriverAge.placeholder")} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Additional drivers</label>
+                <label className={labelCls}>{t("home.additionalDrivers")}</label>
                 <select value={additionalDrivers} onChange={e => setAdditionalDrivers(Number(e.target.value))} className={selectCls}>
-                  {[0,1,2,3,4].map(n => <option key={n} value={n}>{n === 0 ? "None" : `${n} additional`}</option>)}
+                  <option value={0}>{t("home.additionalDrivers.none")}</option>
+                  {[1,2,3,4].map(n => (
+                    <option key={n} value={n}>{t("home.additionalDrivers.label", { n: String(n) })}</option>
+                  ))}
                 </select>
               </div>
 
@@ -535,7 +559,7 @@ function CustomerHome() {
 
               {desktopWithAdditional && Array.from({ length: additionalDrivers }).map((_, i) => (
                 <div key={i}>
-                  <label className={labelCls}>Driver {i + 2} age</label>
+                  <label className={labelCls}>{t("home.driverAge.label", { n: String(i + 2) })}</label>
                   <input type="number" min={21} max={99}
                     value={additionalDriverAges[i] ?? ""}
                     onChange={e => {
@@ -543,13 +567,13 @@ function CustomerHome() {
                       next[i] = e.target.value;
                       setAdditionalDriverAges(next);
                     }}
-                    placeholder="e.g. 28" className={inputCls} />
+                    placeholder={t("home.driverAge.placeholder")} className={inputCls} />
                 </div>
               ))}
 
               {mobile && additionalDrivers > 0 && Array.from({ length: additionalDrivers }).map((_, i) => (
                 <div key={i}>
-                  <label className={labelCls}>Driver {i + 2} age</label>
+                  <label className={labelCls}>{t("home.driverAge.label", { n: String(i + 2) })}</label>
                   <input type="number" min={21} max={99}
                     value={additionalDriverAges[i] ?? ""}
                     onChange={e => {
@@ -557,7 +581,7 @@ function CustomerHome() {
                       next[i] = e.target.value;
                       setAdditionalDriverAges(next);
                     }}
-                    placeholder="e.g. 28" className={inputCls} />
+                    placeholder={t("home.driverAge.placeholder")} className={inputCls} />
                 </div>
               ))}
             </div>
@@ -565,11 +589,8 @@ function CustomerHome() {
             {/* Young driver warning */}
             {hasYoungDriverWarning && (
               <div className="mb-3 border border-amber-300 bg-amber-50 px-4 py-3">
-                <p className="text-sm font-black text-amber-800 mb-1">⚠ Young driver surcharge may apply</p>
-                <p className="text-sm font-semibold text-amber-700">
-                  Drivers aged 21–24 are typically subject to a young driver surcharge. This fee is set by the car hire company
-                  and will be included in their bid price. You will see the full cost before you confirm.
-                </p>
+                <p className="text-sm font-black text-amber-800 mb-1">{t("home.youngDriver.title")}</p>
+                <p className="text-sm font-semibold text-amber-700">{t("home.youngDriver.body")}</p>
               </div>
             )}
 
@@ -582,32 +603,30 @@ function CustomerHome() {
               </div>
             )}
 
-            {/* Desktop, no additional drivers: special requirements left | no account needed right */}
             {desktopNoAdditional && (
               <div className="grid grid-cols-4 gap-3 mb-3">
                 <div className="col-span-2 flex items-center">
                   <button type="button" onClick={() => setNotesOpen(o => !o)}
                     className="flex items-center gap-2 text-sm font-black text-black hover:text-[#ff7a00] transition-colors">
                     <span className="text-lg leading-none">{notesOpen ? "−" : "+"}</span>
-                    Add special requirements
+                    {t("home.addSpecialRequirements")}
                   </button>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-sm font-bold text-black">No account needed — sign in when you are ready to confirm</p>
+                  <p className="text-sm font-bold text-black">{t("home.noAccountNeeded")}</p>
                 </div>
               </div>
             )}
 
-            {/* Desktop with additional drivers OR mobile: special requirements + Book Now */}
             {(desktopWithAdditional || mobile) && (
               <div className="mb-3">
                 <button type="button" onClick={() => setNotesOpen(o => !o)}
                   className="flex items-center gap-2 text-sm font-black text-black hover:text-[#ff7a00] transition-colors mb-3">
                   <span className="text-lg leading-none">{notesOpen ? "−" : "+"}</span>
-                  Add special requirements
+                  {t("home.addSpecialRequirements")}
                 </button>
                 <BookNowButton tall />
-                <p className="text-sm font-bold text-black mt-1">No account needed — sign in when you are ready to confirm</p>
+                <p className="text-sm font-bold text-black mt-1">{t("home.noAccountNeeded")}</p>
               </div>
             )}
 
@@ -619,25 +638,23 @@ function CustomerHome() {
       <section className="bg-white pt-6 pb-8 lg:pt-10 lg:pb-14">
         <div className="mx-auto max-w-7xl px-4">
           <div className="mb-10">
-            <h2 className="text-3xl font-black text-black sm:text-4xl lg:text-5xl">How Camel works</h2>
-            <p className="mt-3 text-lg font-semibold text-black max-w-xl">
-              Three steps to get a car hire company delivering to you — no airport desk, no queuing.
-            </p>
+            <h2 className="text-3xl font-black text-black sm:text-4xl lg:text-5xl">{t("home.howItWorks.title")}</h2>
+            <p className="mt-3 text-lg font-semibold text-black max-w-xl">{t("home.howItWorks.subtitle")}</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
             {[
-              { step: "01", title: "Submit your request", points: ["Enter your pickup and drop-off location","Choose your dates, passengers and vehicle type","Your request is sent to local car hire companies","Takes less than 2 minutes"] },
-              { step: "02", title: "Receive competitive bids", points: ["Local car hire companies within range are notified","Each company submits their best price for car hire and fuel","You see full price breakdowns — no hidden extras","Compare ratings and reviews from real customers"] },
-              { step: "03", title: "Accept and confirm", points: ["Choose the offer that suits you best","The full fuel deposit is taken upon booking — refunded for what you don't use","Your driver meets you at the agreed location","Confirm fuel level and insurance, take the keys and go"] },
+              { step: "01", titleKey: "home.step1.title", points: ["home.step1.p1","home.step1.p2","home.step1.p3","home.step1.p4"] },
+              { step: "02", titleKey: "home.step2.title", points: ["home.step2.p1","home.step2.p2","home.step2.p3","home.step2.p4"] },
+              { step: "03", titleKey: "home.step3.title", points: ["home.step3.p1","home.step3.p2","home.step3.p3","home.step3.p4"] },
             ].map((s, i) => (
               <div key={i} className="bg-[#f0f0f0] p-7">
                 <div className="mb-4"><span className="text-3xl font-black text-black/20">{s.step}</span></div>
-                <h3 className="text-xl font-black text-black mb-4">{s.title}</h3>
+                <h3 className="text-xl font-black text-black mb-4">{t(s.titleKey)}</h3>
                 <ul className="space-y-3">
-                  {s.points.map((p, j) => (
+                  {s.points.map((pk, j) => (
                     <li key={j} className="flex items-start gap-3 text-base font-semibold text-black">
                       <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center bg-black text-white text-[10px] font-black">{j+1}</span>
-                      <span>{p}</span>
+                      <span>{t(pk)}</span>
                     </li>
                   ))}
                 </ul>
@@ -645,10 +662,10 @@ function CustomerHome() {
             ))}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[["🚗","Car delivered to your door"],["🛡️","Full insurance, zero excess"],["⛽","Pay only for fuel used"],["✅","No airport queues"]].map(([icon, text]) => (
-              <div key={text} className="flex items-center gap-3 bg-[#f0f0f0] px-4 py-5">
-                <span className="text-xl">{icon}</span>
-                <span className="text-sm font-black text-black">{text}</span>
+            {(["home.badge1","home.badge2","home.badge3","home.badge4"] as const).map((key, i) => (
+              <div key={key} className="flex items-center gap-3 bg-[#f0f0f0] px-4 py-5">
+                <span className="text-xl">{["🚗","🛡️","⛽","✅"][i]}</span>
+                <span className="text-sm font-black text-black">{t(key)}</span>
               </div>
             ))}
           </div>
@@ -659,23 +676,23 @@ function CustomerHome() {
       <section className="bg-[#f0f0f0] py-12 lg:py-16">
         <div className="mx-auto max-w-7xl px-4">
           <div className="mb-8">
-            <h2 className="text-3xl font-black text-black sm:text-4xl">You only pay for the fuel you use</h2>
-            <p className="mt-3 text-base font-bold text-black max-w-xl">Your booking includes a full tank as a deposit. You pay only for the quarters used — the rest is refunded.</p>
+            <h2 className="text-3xl font-black text-black sm:text-4xl">{t("home.fuel.title")}</h2>
+            <p className="mt-3 text-base font-bold text-black max-w-xl">{t("home.fuel.subtitle")}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-4">
             {[
-              { level: "Full",    bar: 4, colour: "bg-green-500", label: "Returned full",     desc: "Full refund of deposit" },
-              { level: "¾ Tank", bar: 3, colour: "bg-amber-400",  label: "Returned ¾ full",   desc: "Pay for ¼ tank only" },
-              { level: "½ Tank", bar: 2, colour: "bg-orange-400", label: "Returned half full", desc: "Pay for ½ tank" },
-              { level: "¼ Tank", bar: 1, colour: "bg-red-400",    label: "Returned ¼ full",   desc: "Pay for ¾ tank" },
+              { levelKey: "home.fuel.full",    bar: 4, colour: "bg-green-500",  labelKey: "home.fuel.full.label",    descKey: "home.fuel.full.desc" },
+              { levelKey: "home.fuel.three",   bar: 3, colour: "bg-amber-400",  labelKey: "home.fuel.three.label",   descKey: "home.fuel.three.desc" },
+              { levelKey: "home.fuel.half",    bar: 2, colour: "bg-orange-400", labelKey: "home.fuel.half.label",    descKey: "home.fuel.half.desc" },
+              { levelKey: "home.fuel.quarter", bar: 1, colour: "bg-red-400",    labelKey: "home.fuel.quarter.label", descKey: "home.fuel.quarter.desc" },
             ].map(f => (
-              <div key={f.level} className="bg-white p-6 text-center">
-                <p className="text-2xl font-black text-black mb-3">{f.level}</p>
+              <div key={f.levelKey} className="bg-white p-6 text-center">
+                <p className="text-2xl font-black text-black mb-3">{t(f.levelKey)}</p>
                 <div className="flex gap-1.5 justify-center mb-3">
                   {[0,1,2,3].map(i => <div key={i} className={`h-3 w-10 ${i < f.bar ? f.colour : "bg-black/10"}`} />)}
                 </div>
-                <p className="text-sm font-black text-black">{f.label}</p>
-                <p className="mt-1 text-sm font-semibold text-black/50">{f.desc}</p>
+                <p className="text-sm font-black text-black">{t(f.labelKey)}</p>
+                <p className="mt-1 text-sm font-semibold text-black/50">{t(f.descKey)}</p>
               </div>
             ))}
           </div>
@@ -688,14 +705,15 @@ function CustomerHome() {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="bg-[#f0f0f0] overflow-hidden">
               <div className="px-6 py-5">
-                <h2 className="text-3xl font-black text-black sm:text-4xl">No surprises when you arrive</h2>
-                <p className="mt-3 text-base font-semibold text-black leading-relaxed">Payment including fuel deposit is taken in full at the time of booking. When your driver arrives there is nothing left to do except confirm the fuel tank level, confirm you received your insurance documents, take the keys and go.</p>
+                <h2 className="text-3xl font-black text-black sm:text-4xl">{t("home.noSurprises.title")}</h2>
+                <p className="mt-3 text-base font-semibold text-black leading-relaxed">{t("home.noSurprises.body")}</p>
               </div>
               <div className="px-6 pb-6">
                 <ul className="space-y-4">
-                  {[["🚗","Car delivered to your exact location — hotel, apartment, airport exit"],["🛡️","Full insurance with zero excess included in the price"],["⛽","Full tank on delivery — pay only for the fuel you actually use"],["📄","All paperwork completed at booking — nothing to sign on arrival"],["⭐","Reviews from real customers so you can choose with confidence"]].map(([icon, text]) => (
-                    <li key={text as string} className="flex items-start gap-4 text-base font-semibold text-black">
-                      <span className="text-xl shrink-0">{icon}</span><span>{text}</span>
+                  {(["home.noSurprises.p1","home.noSurprises.p2","home.noSurprises.p3","home.noSurprises.p4","home.noSurprises.p5"] as const).map((key, i) => (
+                    <li key={key} className="flex items-start gap-4 text-base font-semibold text-black">
+                      <span className="text-xl shrink-0">{["🚗","🛡️","⛽","📄","⭐"][i]}</span>
+                      <span>{t(key)}</span>
                     </li>
                   ))}
                 </ul>
@@ -703,25 +721,27 @@ function CustomerHome() {
             </div>
             <div className="overflow-hidden">
               <div className="bg-[#f0f0f0] px-6 py-5">
-                <h3 className="text-3xl font-black text-black sm:text-4xl">Why Book a Camel Car?</h3>
-                <p className="mt-1 text-sm font-bold text-black/50">How we compare to traditional car hire</p>
+                <h3 className="text-3xl font-black text-black sm:text-4xl">{t("home.whyCamel.title")}</h3>
+                <p className="mt-1 text-sm font-bold text-black/50">{t("home.whyCamel.subtitle")}</p>
               </div>
               <div className="bg-[#e8e8e8] px-6 py-5">
-                <p className="text-xs font-black uppercase tracking-widest text-black mb-4">Traditional car hire</p>
+                <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{t("home.traditional.label")}</p>
                 <ul className="space-y-3">
-                  {["Queue at airport desk — often 30–60 minutes","Surprise extras added on arrival","Fuel penalties if not returned full","Hidden insurance charges and excess fees"].map(p => (
-                    <li key={p} className="flex items-center gap-3 text-base font-semibold text-black">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-black/20 text-black text-[10px] font-black">✗</span>{p}
+                  {(["home.traditional.p1","home.traditional.p2","home.traditional.p3","home.traditional.p4"] as const).map(key => (
+                    <li key={key} className="flex items-center gap-3 text-base font-semibold text-black">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-black/20 text-black text-[10px] font-black">✗</span>
+                      {t(key)}
                     </li>
                   ))}
                 </ul>
               </div>
               <div className="bg-[#f0f0f0] px-6 py-5">
-                <p className="text-xs font-black uppercase tracking-widest text-black mb-4">Camel Global</p>
+                <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{t("home.camel.label")}</p>
                 <ul className="space-y-3">
-                  {["Car delivered directly to you — no queuing","Price fixed and confirmed at booking","Pay only for the fuel you actually use","Full insurance with zero excess, always included"].map(p => (
-                    <li key={p} className="flex items-center gap-3 text-base font-semibold text-black">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-green-500 text-white text-[10px] font-black">✓</span>{p}
+                  {(["home.camel.p1","home.camel.p2","home.camel.p3","home.camel.p4"] as const).map(key => (
+                    <li key={key} className="flex items-center gap-3 text-base font-semibold text-black">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center bg-green-500 text-white text-[10px] font-black">✓</span>
+                      {t(key)}
                     </li>
                   ))}
                 </ul>
