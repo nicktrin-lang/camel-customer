@@ -94,12 +94,10 @@ function LoginForm() {
             {mode === "login" ? t("common.account") : t("reset.title")}
           </p>
           <h1 className="text-4xl font-black text-white md:text-5xl">
-            {mode === "login" ? "Welcome back." : t("reset.title")}
+            {mode === "login" ? t("login.welcomeBack") : t("reset.title")}
           </h1>
           <p className="mt-3 text-base font-semibold text-white/70">
-            {mode === "login"
-              ? t("login.title") + "."
-              : "We'll send you a link to reset your password."}
+            {mode === "login" ? t("login.title") + "." : t("login.resetSubtitle")}
           </p>
         </div>
       </div>
@@ -119,7 +117,7 @@ function LoginForm() {
                   <div>
                     <label className={labelCls}>{t("login.email")}</label>
                     <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                      placeholder="your@email.com" className={inputCls} />
+                      placeholder={t("login.emailPlaceholder")} className={inputCls} />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -156,7 +154,7 @@ function LoginForm() {
 
                 {resetSent ? (
                   <div className="bg-[#f0f0f0] px-5 py-5 space-y-2">
-                    <p className="text-base font-black text-black">Reset email sent ✓</p>
+                    <p className="text-base font-black text-black">{t("login.resetSent")}</p>
                     <p className="text-sm font-semibold text-black/70">{t("reset.sent")}</p>
                     <button type="button" onClick={() => setMode("login")}
                       className="text-sm font-black text-[#ff7a00] hover:underline">
@@ -174,7 +172,7 @@ function LoginForm() {
                       <div>
                         <label className={labelCls}>{t("login.email")}</label>
                         <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                          placeholder="your@email.com" className={inputCls} />
+                          placeholder={t("login.emailPlaceholder")} className={inputCls} />
                       </div>
                       <HCaptcha key={forgotKey} onVerify={handleForgotToken} onExpire={() => setForgotToken("")} />
                       <button type="submit" disabled={resetLoading}

@@ -148,6 +148,10 @@
   "login.noAccount": "¿No tienes cuenta?",
   "login.signUp": "Regístrate",
   "login.forgotPassword": "¿Olvidaste tu contraseña?",
+  "login.welcomeBack": "Bienvenido de nuevo.",
+  "login.emailPlaceholder": "tu@correo.com",
+  "login.resetSubtitle": "Te enviaremos un enlace para restablecer tu contraseña.",
+  "login.resetSent": "Correo de restablecimiento enviado ✓",
   "login.error.invalid": "Correo o contraseña incorrectos.",
 
   "signup.title": "Crear cuenta",
