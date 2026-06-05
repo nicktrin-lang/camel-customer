@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 type Currency = "EUR" | "GBP" | "USD";
 
@@ -183,6 +184,7 @@ function CustomerCancellationSummary({ bk }: { bk: BookingData }) {
 function CompletionStatementButton({ bookingId, accessToken }: { bookingId: string; accessToken: string }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState<string|null>(null);
+  const { t } = useTranslation();
   async function handleDownload() {
     setLoading(true); setErr(null);
     try {
@@ -199,7 +201,7 @@ function CompletionStatementButton({ bookingId, accessToken }: { bookingId: stri
     <div>
       <button type="button" onClick={handleDownload} disabled={loading}
         className="inline-flex items-center gap-2 border border-[#ff7a00] px-5 py-2.5 text-sm font-black text-[#ff7a00] hover:bg-[#ff7a00] hover:text-white transition-colors disabled:opacity-50">
-        {loading ? "Loading…" : "⬇ Booking Completion Statement"}
+        {loading ? t("common.loading") : `⬇ ${t("booking.completionStatement")}`}
       </button>
       {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
     </div>
@@ -273,6 +275,7 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
   const [saving,setSaving]       = useState(false);
   const [error,setError]         = useState<string|null>(null);
   const [submitted,setSubmitted] = useState(!!existingReview);
+  const { t } = useTranslation();
   async function submit() {
     if (!rating) { setError("Please select a star rating."); return; }
     if (comment&&containsBadWords(comment)) { setError("Your review contains language that is not permitted."); return; }
@@ -287,8 +290,8 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
   }
   return (
     <div id="review" className="bg-white p-6">
-      <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-3">⭐ {submitted?"Your Review":"Leave a Review"}</p>
-      <p className="text-sm font-semibold text-black/50 mb-4">{submitted?"Thank you for your feedback.":"How was your experience?"}</p>
+      <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-3">⭐ {submitted ? t("booking.review.thanks") : t("booking.review.title")}</p>
+      <p className="text-sm font-semibold text-black/50 mb-4">{submitted ? t("booking.review.thanks") : "How was your experience?"}</p>
       {submitted?(
         <>
           <div className="flex gap-0.5 mb-3">{[1,2,3,4,5].map(n=><span key={n} className={`text-2xl ${n<=rating?"text-amber-400":"text-black/10"}`}>★</span>)}</div>
@@ -302,7 +305,9 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
           <div className="mb-4"><StarPicker value={rating} onChange={setRating}/></div>
           <textarea rows={3} value={comment} onChange={e=>setComment(e.target.value)} className="w-full bg-[#f0f0f0] px-4 py-3 text-sm font-medium text-black outline-none focus:bg-[#e8e8e8] placeholder:text-black/30 resize-none mb-3" placeholder="Tell us about your experience…"/>
           {error&&<p className="text-sm font-semibold text-red-600 mb-3">{error}</p>}
-          <button type="button" onClick={submit} disabled={saving||!rating} className="w-full bg-[#ff7a00] py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">{saving?"Submitting…":"Submit Review"}</button>
+          <button type="button" onClick={submit} disabled={saving||!rating} className="w-full bg-[#ff7a00] py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+            {saving ? t("common.loading") : t("booking.review.submit")}
+          </button>
         </>
       )}
     </div>
@@ -310,6 +315,7 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
 }
 
 function InsuranceConfirmCard({ driverConfirmed,driverConfirmedAt,customerConfirmed,customerConfirmedAt,insuranceChecked,onInsuranceChange,onConfirm,onUnconfirm,saving,locked }: { driverConfirmed:boolean;driverConfirmedAt:string|null;customerConfirmed:boolean;customerConfirmedAt:string|null;insuranceChecked:boolean;onInsuranceChange:(v:boolean)=>void;onConfirm:()=>void;onUnconfirm:()=>void;saving:boolean;locked:boolean }) {
+  const { t } = useTranslation();
   return (
     <div className={`p-6 ${locked?"bg-green-50 border border-green-200":"bg-white"}`}>
       <p className="text-xs font-black uppercase tracking-widest text-black mb-1">📄 Insurance Documents</p>
@@ -332,10 +338,10 @@ function InsuranceConfirmCard({ driverConfirmed,driverConfirmedAt,customerConfir
           <div className="flex gap-3">
             {!customerConfirmed?(
               <button type="button" onClick={onConfirm} disabled={saving||!driverConfirmed||!insuranceChecked} className="flex-1 bg-[#ff7a00] py-4 text-sm font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {saving?"Saving…":!driverConfirmed?"Waiting for driver…":!insuranceChecked?"Tick box above to confirm":"✓ Confirm receipt of documents"}
+                {saving?t("common.loading"):!driverConfirmed?"Waiting for driver…":!insuranceChecked?"Tick box above to confirm":"✓ Confirm receipt of documents"}
               </button>
             ):(
-              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?"Saving…":"Dispute / I did not receive them"}</button>
+              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):"Dispute / I did not receive them"}</button>
             )}
           </div>
         </>
@@ -349,6 +355,7 @@ function FuelConfirmCard({ title,effectiveFuel,effectiveReady,effectiveReadyAt,c
   customerConfirmed:boolean; customerConfirmedAt:string|null; locked:boolean; notes:string;
   onNotesChange:(v:string)=>void; onConfirm:()=>void; onUnconfirm:()=>void; saving:boolean; partnerOverrideActive:boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div className={`p-6 ${locked?"bg-green-50 border border-green-200":"bg-white"}`}>
       <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{title}</p>
@@ -369,10 +376,10 @@ function FuelConfirmCard({ title,effectiveFuel,effectiveReady,effectiveReadyAt,c
           <div className="flex gap-3">
             {!customerConfirmed?(
               <button type="button" onClick={onConfirm} disabled={saving||!effectiveReady} className="flex-1 bg-[#ff7a00] py-4 text-sm font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {saving?"Saving…":!effectiveReady?"Waiting for driver…":"✓ I agree with this fuel level"}
+                {saving?t("common.loading"):!effectiveReady?"Waiting for driver…":"✓ I agree with this fuel level"}
               </button>
             ):(
-              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?"Saving…":"Dispute / Change"}</button>
+              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):"Dispute / Change"}</button>
             )}
           </div>
         </>
@@ -387,6 +394,7 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
   const [showReviews,setShowReviews] = useState(false);
   const [reviews,setReviews]         = useState<ReviewItem[]>([]);
   const [loadingRevs,setLoadingRevs] = useState(false);
+  const { t } = useTranslation();
   async function toggleReviews() {
     if (showReviews) { setShowReviews(false); return; }
     setShowReviews(true); if (reviews.length>0) return;
@@ -410,7 +418,7 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
           ):<p className="text-xs font-semibold text-black/40">No reviews yet</p>}
           {showReviews&&(
             <div className="bg-white p-4 space-y-4">
-              {loadingRevs?<p className="text-sm text-black/40">Loading…</p>:reviews.length===0?<p className="text-sm text-black/40">No reviews to show.</p>:reviews.map(r=>(
+              {loadingRevs?<p className="text-sm text-black/40">{t("common.loading")}</p>:reviews.length===0?<p className="text-sm text-black/40">No reviews to show.</p>:reviews.map(r=>(
                 <div key={r.id} className="border-b border-black/5 pb-4 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1"><span>{[1,2,3,4,5].map(n=><span key={n} className={n<=r.rating?"text-amber-400":"text-black/10"}>★</span>)}</span><span className="text-xs text-black/30">{fmt(r.created_at)}</span></div>
                   {r.comment?<p className="text-sm font-semibold text-black">{r.comment}</p>:<p className="text-xs italic text-black/30">No written comment.</p>}
@@ -437,7 +445,7 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
           ):(
             <button type="button" onClick={()=>onAccept(bid.id)} disabled={!!acceptingId||expired}
               className="bg-[#ff7a00] px-6 py-3 text-sm font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
-              {acceptingId===bid.id?"Going to checkout…":"Accept & Pay →"}
+              {acceptingId===bid.id?t("common.loading"):"Accept & Pay →"}
             </button>
           )}
         </div>
@@ -449,6 +457,7 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
 function ReceiptDownloadButton({ bookingId, accessToken }: { bookingId: string; accessToken: string }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState<string|null>(null);
+  const { t } = useTranslation();
   async function handleDownload() {
     setLoading(true); setErr(null);
     try {
@@ -465,7 +474,7 @@ function ReceiptDownloadButton({ bookingId, accessToken }: { bookingId: string; 
     <div>
       <button type="button" onClick={handleDownload} disabled={loading}
         className="inline-flex items-center gap-2 border border-[#ff7a00] px-5 py-2.5 text-sm font-black text-[#ff7a00] hover:bg-[#ff7a00] hover:text-white transition-colors disabled:opacity-50">
-        {loading ? "Loading…" : "⬇ Booking Confirmation Receipt"}
+        {loading ? t("common.loading") : `⬇ ${t("booking.receipt")}`}
       </button>
       {err && <p className="mt-2 text-xs font-semibold text-red-600">{err}</p>}
     </div>
@@ -476,6 +485,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const supabase     = useMemo(()=>createCustomerBrowserClient(),[]);
   const router       = useRouter();
   const searchParams = useSearchParams();
+  const { t }        = useTranslation();
+
   const [requestId,        setRequestId]        = useState("");
   const [authChecked,      setAuthChecked]      = useState(false);
   const [loading,          setLoading]          = useState(true);
@@ -594,7 +605,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   if (!authChecked) return null;
   if (loading) return (
     <div className="min-h-screen bg-white flex flex-col">
-      <div className="w-full bg-black px-6 py-16"><p className="mx-auto max-w-6xl text-white/50 font-semibold">Loading…</p></div>
+      <div className="w-full bg-black px-6 py-16"><p className="mx-auto max-w-6xl text-white/50 font-semibold">{t("common.loading")}</p></div>
     </div>
   );
   if (!data?.request) return (
@@ -637,11 +648,11 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       <div className="w-full bg-black px-6 py-16 text-white">
         <div className="mx-auto max-w-6xl flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">My Bookings</p>
-            <h1 className="text-4xl font-black text-white md:text-5xl">Booking #{req.job_number??"—"}</h1>
+            <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">{t("bookings.title")}</p>
+            <h1 className="text-4xl font-black text-white md:text-5xl">{t("booking.title")} #{req.job_number??"—"}</h1>
             <p className="mt-3 text-base font-semibold text-white/70">Review your booking and any bids received.</p>
           </div>
-          <Link href="/bookings" className="border border-white/30 px-5 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors self-start mt-1">← My Bookings</Link>
+          <Link href="/bookings" className="border border-white/30 px-5 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors self-start mt-1">← {t("bookings.title")}</Link>
         </div>
       </div>
 
@@ -673,14 +684,14 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <div className="border border-red-200 bg-white px-6 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-black text-red-700">Cancel this booking</p>
+                  <p className="text-sm font-black text-red-700">{t("booking.cancel")}</p>
                   {isWithin48?(
                     <p className="mt-1 text-xs font-semibold text-red-500">⚠ Your pickup is within 48 hours. If you cancel now, the car hire fee of {fmt2(carHire)} is non-refundable. Your fuel deposit of {fmt2(fuel)} will be refunded.</p>
                   ):(
                     <p className="mt-1 text-xs font-semibold text-black/50">More than 48 hours before pickup — you will receive a full refund of {fmt2(carHire+fuel)}.</p>
                   )}
                 </div>
-                {!showCancel&&<button type="button" onClick={()=>setShowCancel(true)} className="shrink-0 border border-red-300 px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50 transition-colors">Cancel Booking</button>}
+                {!showCancel&&<button type="button" onClick={()=>setShowCancel(true)} className="shrink-0 border border-red-300 px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50 transition-colors">{t("booking.cancel")}</button>}
               </div>
               {showCancel&&(
                 <div className="mt-4 space-y-3">
@@ -689,7 +700,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
                     <textarea rows={2} value={cancelReason} onChange={e=>setCancelReason(e.target.value)} placeholder="Tell us why you're cancelling…" className="mt-1 w-full border border-red-200 bg-[#f0f0f0] px-3 py-2.5 text-sm font-medium text-black outline-none focus:border-red-400 resize-none"/>
                   </div>
                   <div className="flex gap-3">
-                    <button type="button" onClick={cancelBooking} disabled={cancelling} className="bg-red-600 px-6 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 transition-colors">{cancelling?"Cancelling…":"Confirm Cancellation"}</button>
+                    <button type="button" onClick={cancelBooking} disabled={cancelling} className="bg-red-600 px-6 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 transition-colors">{cancelling?t("common.loading"):"Confirm Cancellation"}</button>
                     <button type="button" onClick={()=>setShowCancel(false)} disabled={cancelling} className="border border-black/20 px-6 py-3 text-sm font-black text-black hover:bg-black/5 transition-colors">Keep Booking</button>
                   </div>
                 </div>
@@ -701,20 +712,20 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-xs font-black uppercase tracking-widest text-black mb-5">Booking Details</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
-                ["Pickup",          req.pickup_address],
-                ["Drop-off",        req.dropoff_address||"—"],
-                ["Pickup time",     fmt(req.pickup_at)],
-                ["Drop-off time",   fmt(req.dropoff_at)],
-                ["Duration",        formatDuration(req.journey_duration_minutes)],
-                ["Passengers",      req.passengers],
-                ["Suitcases",       req.suitcases],
-                ["Sport equipment", sportEquipmentLabel(req.sport_equipment)],
-                ["Vehicle",         req.vehicle_category_name||"—"],
-                ["Main driver age", req.driver_age ?? "—"],
-                ["Additional drivers", req.additional_drivers > 0
+                [t("bookings.pickup"),      req.pickup_address],
+                [t("bookings.dropoff"),     req.dropoff_address||"—"],
+                ["Pickup time",             fmt(req.pickup_at)],
+                ["Drop-off time",           fmt(req.dropoff_at)],
+                ["Duration",                formatDuration(req.journey_duration_minutes)],
+                [t("home.passengers"),      req.passengers],
+                [t("home.suitcases"),       req.suitcases],
+                ["Sport equipment",         sportEquipmentLabel(req.sport_equipment)],
+                ["Vehicle",                 req.vehicle_category_name||"—"],
+                [t("home.mainDriverAge"),   req.driver_age ?? "—"],
+                [t("home.additionalDrivers"), req.additional_drivers > 0
                   ? `${req.additional_drivers} (ages: ${req.additional_driver_ages || "—"})`
-                  : "None"],
-                ["Status",          req.status],
+                  : t("home.additionalDrivers.none")],
+                ["Status", req.status],
               ].map(([l,v])=>(
                 <p key={String(l)} className="text-sm font-semibold text-black"><span className="font-black">{l}:</span> {String(v)}</p>
               ))}
@@ -725,7 +736,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
 
           {showYoungDriverNote && (
             <div className="border border-amber-300 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-black text-amber-800 mb-1">⚠ Young driver surcharge may apply</p>
+              <p className="text-sm font-black text-amber-800 mb-1">{t("home.youngDriver.title")}</p>
               <p className="text-sm font-semibold text-amber-700">One or more drivers on this booking are aged 21–24. Car hire companies may include a young driver surcharge in their bid price.</p>
             </div>
           )}

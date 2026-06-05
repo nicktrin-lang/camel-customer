@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 const inputCls         = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
 const inputDisabledCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black/30 cursor-not-allowed";
@@ -11,6 +12,7 @@ const labelCls         = "block text-xs font-black uppercase tracking-widest tex
 export default function AccountPage() {
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
   const router   = useRouter();
+  const { t }    = useTranslation();
 
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
@@ -90,7 +92,7 @@ export default function AccountPage() {
   if (loading) return (
     <div className="w-full bg-black px-6 py-20">
       <div className="mx-auto max-w-2xl">
-        <p className="text-white/50 font-semibold">Loading…</p>
+        <p className="text-white/50 font-semibold">{t("common.loading")}</p>
       </div>
     </div>
   );
@@ -98,20 +100,17 @@ export default function AccountPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* Hero */}
       <div className="w-full bg-black px-6 py-16 text-white">
         <div className="mx-auto max-w-2xl">
-          <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">My Account</p>
-          <h1 className="text-4xl font-black text-white md:text-5xl">Your Account</h1>
+          <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">{t("common.account")}</p>
+          <h1 className="text-4xl font-black text-white md:text-5xl">{t("account.title")}</h1>
           <p className="mt-3 text-base font-semibold text-white/70">Manage your profile and account settings.</p>
         </div>
       </div>
 
-      {/* Content */}
       <div className="w-full bg-[#f0f0f0] px-6 py-10">
         <div className="mx-auto max-w-2xl space-y-4">
 
-          {/* Profile */}
           <div className="bg-white p-8">
             <p className="text-xs font-black uppercase tracking-widest text-black/40 mb-6">Profile Details</p>
 
@@ -119,12 +118,12 @@ export default function AccountPage() {
               <div className="mb-5 border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>
             )}
             {saved && (
-              <div className="mb-5 border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">✓ Profile saved successfully.</div>
+              <div className="mb-5 border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">✓ {t("account.saved")}</div>
             )}
 
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className={labelCls}>Full name</label>
+                <label className={labelCls}>{t("account.name")}</label>
                 <input value={fullName} onChange={e => setFullName(e.target.value)}
                   className={inputCls} placeholder="Your full name" />
               </div>
@@ -134,7 +133,7 @@ export default function AccountPage() {
                   className={inputCls} placeholder="+44 7700 000000" />
               </div>
               <div>
-                <label className={labelCls}>Email address</label>
+                <label className={labelCls}>{t("account.email")}</label>
                 <input value={email} disabled className={inputDisabledCls} />
                 <p className="mt-2 text-xs font-semibold text-black/30">
                   Email address cannot be changed here. Contact support if needed.
@@ -142,14 +141,13 @@ export default function AccountPage() {
               </div>
               <button type="submit" disabled={saving}
                 className="bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
-                {saving ? "Saving…" : "Save changes"}
+                {saving ? t("common.loading") : t("account.saveChanges")}
               </button>
             </form>
           </div>
 
-          {/* Delete account */}
           <div className="bg-white p-8">
-            <p className="text-xs font-black uppercase tracking-widest text-red-500 mb-4">Delete Account</p>
+            <p className="text-xs font-black uppercase tracking-widest text-red-500 mb-4">{t("account.deleteAccount")}</p>
             <p className="text-base font-semibold text-black mb-2">
               Deleting your account will remove your access immediately. Booking records are retained
               for legal and financial purposes in line with GDPR. This cannot be undone.
@@ -166,7 +164,7 @@ export default function AccountPage() {
               </button>
             ) : (
               <div className="mt-5 bg-red-50 border border-red-200 p-6 space-y-4">
-                <p className="text-sm font-black text-red-800">Are you sure? This will permanently deactivate your account.</p>
+                <p className="text-sm font-black text-red-800">{t("account.deleteConfirm")}</p>
                 <p className="text-sm font-semibold text-red-700">
                   Type <span className="font-mono font-black">DELETE</span> to confirm.
                 </p>
@@ -179,12 +177,12 @@ export default function AccountPage() {
                     onClick={() => { setShowConfirm(false); setConfirmText(""); setDeleteError(null); }}
                     disabled={deleting}
                     className="border border-black/20 px-5 py-3 text-sm font-black text-black hover:bg-[#f0f0f0] transition-colors">
-                    Cancel
+                    {t("common.cancel")}
                   </button>
                   <button type="button" onClick={handleDelete}
                     disabled={confirmText !== "DELETE" || deleting}
                     className="bg-red-600 px-5 py-3 text-sm font-black text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
-                    {deleting ? "Deleting…" : "Confirm Delete Account"}
+                    {deleting ? t("common.loading") : "Confirm Delete Account"}
                   </button>
                 </div>
               </div>
