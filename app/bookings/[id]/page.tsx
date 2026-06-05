@@ -118,25 +118,32 @@ function getTimeRemaining(expiresAt?: string|null) {
   const s=Math.floor(diff/1000),d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),sec=s%60;
   return { expired:false, label:d>0?`${d}d ${h}h ${m}m`:h>0?`${h}h ${m}m ${sec}s`:`${m}m ${sec}s` };
 }
-function bookingStatusLabel(s?: string|null) {
-  switch(String(s||"").toLowerCase()) {
-    case "confirmed": case "driver_assigned": case "en_route": case "arrived": return "Awaiting delivery";
-    case "collected": case "returned": return "On Hire";
-    case "completed": return "Completed"; case "cancelled": return "Cancelled";
-    default: return String(s||"—").replaceAll("_"," ");
-  }
-}
-function sportEquipmentLabel(v: string|null): string {
-  if (!v||v==="none") return "None";
-  const map: Record<string,string> = {
-    golf_single:"Golf clubs — 1 bag", golf_two:"Golf clubs — 2 bags", golf_three:"Golf clubs — 3 bags", golf_four:"Golf clubs — 4+ bags",
-    skis_pair:"Skis / snowboard — 1 set", skis_two:"Skis / snowboard — 2 sets", skis_three:"Skis / snowboard — 3+ sets",
-    bikes_one:"Bikes — 1", bikes_two:"Bikes — 2", bikes_three:"Bikes — 3+", other:"Other large equipment",
-  };
-  return map[v]||v;
+
+const SPORT_KEY_MAP: Record<string, string> = {
+  golf_single:"sport.golf1", golf_two:"sport.golf2", golf_three:"sport.golf3", golf_four:"sport.golf4",
+  skis_pair:"sport.skis1", skis_two:"sport.skis2", skis_three:"sport.skis3",
+  bikes_one:"sport.bikes1", bikes_two:"sport.bikes2", bikes_three:"sport.bikes3",
+  other:"sport.other", none:"sport.none",
+};
+
+const BAD_WORDS = ["fuck","shit","cunt","bastard","asshole","dick","bitch","wanker","puta","mierda","coño","joder","hostia","gilipollas"];
+function containsBadWords(t: string) { return BAD_WORDS.some(w=>t.toLowerCase().includes(w)); }
+
+function StarPicker({ value, onChange }: { value:number; onChange:(v:number)=>void }) {
+  const [hovered,setHovered] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1,2,3,4,5].map(n=>(
+        <button key={n} type="button" onMouseEnter={()=>setHovered(n)} onMouseLeave={()=>setHovered(0)} onClick={()=>onChange(n)} className="text-3xl leading-none transition-transform hover:scale-110">
+          <span className={(hovered||value)>=n?"text-amber-400":"text-black/10"}>★</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function CustomerCancellationSummary({ bk }: { bk: BookingData }) {
+  const { t } = useTranslation();
   const curr: Currency = bk.currency ?? "EUR";
   const carHire  = Number(bk.car_hire_price || 0);
   const fuel     = Number(bk.fuel_price || 0);
@@ -148,35 +155,39 @@ function CustomerCancellationSummary({ bk }: { bk: BookingData }) {
   const fuelRefund     = fuel;
   const totalRefund    = carHireRefund + fuelRefund;
   const nonRefundable  = isPartial ? carHire : 0;
-  const cancelledByLabel = bk.cancelled_by === "partner" ? "The car hire company" : bk.cancelled_by === "admin" ? "Camel Global" : "You";
+  const cancelledByLabel = bk.cancelled_by === "partner"
+    ? t("booking.cancelled.by.partner")
+    : bk.cancelled_by === "admin"
+    ? t("booking.cancelled.by.admin")
+    : t("booking.cancelled.by.you");
   return (
     <div className="border border-red-200 bg-red-50 px-6 py-5 space-y-5">
       <div>
-        <p className="text-base font-black text-red-800">❌ This booking has been cancelled</p>
-        <p className="text-sm font-semibold text-red-600 mt-1">Cancelled by: <strong>{cancelledByLabel}</strong> on {fmt(bk.cancelled_at)}</p>
-        {bk.cancellation_reason && <p className="text-sm font-semibold text-red-600">Reason: {bk.cancellation_reason}</p>}
+        <p className="text-base font-black text-red-800">{t("booking.cancelled.title")}</p>
+        <p className="text-sm font-semibold text-red-600 mt-1">{t("booking.cancelled.cancelledBy", { who: cancelledByLabel, date: fmt(bk.cancelled_at) })}</p>
+        {bk.cancellation_reason && <p className="text-sm font-semibold text-red-600">{t("booking.cancelled.reason", { reason: bk.cancellation_reason })}</p>}
       </div>
       <div className={`px-4 py-3 text-sm font-semibold border ${within48?"bg-amber-50 border-amber-300 text-amber-800":"bg-green-50 border-green-300 text-green-800"}`}>
-        {within48?"⚠ This cancellation was made within 48 hours of your pickup time. Under our cancellation policy, the car hire fee is non-refundable. However, your full fuel deposit will be returned.":"✅ This cancellation was made more than 48 hours before your pickup time. You are entitled to a full refund of everything you paid."}
+        {within48 ? t("booking.cancelled.within48") : t("booking.cancelled.outside48")}
       </div>
       <div className="bg-white border border-red-100 p-4">
-        <p className="text-xs font-black uppercase tracking-widest text-black/50 mb-3">What You Paid</p>
+        <p className="text-xs font-black uppercase tracking-widest text-black/50 mb-3">{t("booking.cancelled.whatYouPaid")}</p>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">Car hire</span><span className="font-black text-black">{fmtCurr(carHire,curr)}</span></div>
-          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">Full tank deposit</span><span className="font-black text-black">{fmtCurr(fuel,curr)}</span></div>
-          <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2"><span className="text-black/60">Total paid</span><span className="text-black">{fmtCurr(total,curr)}</span></div>
+          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">{t("booking.cancelled.carHire")}</span><span className="font-black text-black">{fmtCurr(carHire,curr)}</span></div>
+          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">{t("booking.cancelled.fuelDeposit")}</span><span className="font-black text-black">{fmtCurr(fuel,curr)}</span></div>
+          <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2"><span className="text-black/60">{t("booking.cancelled.totalPaid")}</span><span className="text-black">{fmtCurr(total,curr)}</span></div>
         </div>
       </div>
       <div className="bg-white border border-red-100 p-4">
-        <p className="text-xs font-black uppercase tracking-widest text-black/50 mb-3">Your Refund</p>
+        <p className="text-xs font-black uppercase tracking-widest text-black/50 mb-3">{t("booking.cancelled.yourRefund")}</p>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">Car hire refund</span><span className={`font-black ${carHireRefund>0?"text-green-700":"text-red-500"}`}>{carHireRefund>0?fmtCurr(carHireRefund,curr):"Not refunded — within 48hrs of pickup"}</span></div>
-          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">Fuel deposit refund</span><span className="font-black text-green-700">{fmtCurr(fuelRefund,curr)}</span></div>
-          {nonRefundable>0&&<div className="flex justify-between text-sm"><span className="font-semibold text-black/60">Non-refundable amount</span><span className="font-black text-red-600">{fmtCurr(nonRefundable,curr)}</span></div>}
-          <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2"><span className="text-black">Total refund to you</span><span className="text-green-700 text-base">{fmtCurr(totalRefund,curr)}</span></div>
+          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">{t("booking.cancelled.carHireRefund")}</span><span className={`font-black ${carHireRefund>0?"text-green-700":"text-red-500"}`}>{carHireRefund>0?fmtCurr(carHireRefund,curr):t("booking.cancelled.notRefunded")}</span></div>
+          <div className="flex justify-between text-sm"><span className="font-semibold text-black/60">{t("booking.cancelled.fuelRefund")}</span><span className="font-black text-green-700">{fmtCurr(fuelRefund,curr)}</span></div>
+          {nonRefundable>0&&<div className="flex justify-between text-sm"><span className="font-semibold text-black/60">{t("booking.cancelled.nonRefundable")}</span><span className="font-black text-red-600">{fmtCurr(nonRefundable,curr)}</span></div>}
+          <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2"><span className="text-black">{t("booking.cancelled.totalRefund")}</span><span className="text-green-700 text-base">{fmtCurr(totalRefund,curr)}</span></div>
         </div>
       </div>
-      <p className="text-xs font-semibold text-black/50">Refunds are processed automatically and will appear in your account within 5–10 working days depending on your bank.</p>
+      <p className="text-xs font-semibold text-black/50">{t("booking.cancelled.refundNote")}</p>
     </div>
   );
 }
@@ -209,6 +220,7 @@ function CompletionStatementButton({ bookingId, accessToken }: { bookingId: stri
 }
 
 function BookingSummaryCard({ bk, accessToken }: { bk: BookingData; accessToken: string }) {
+  const { t } = useTranslation();
   const curr: Currency  = bk.currency ?? "EUR";
   const fmt2 = (n: number) => fmtCurr(n, curr);
   const carHireAmt  = Number(bk.car_hire_price||0);
@@ -224,48 +236,37 @@ function BookingSummaryCard({ bk, accessToken }: { bk: BookingData; accessToken:
     <>
       <div className="bg-[#003768] p-6">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-xs font-black uppercase tracking-widest text-white/50">Booking Summary</p>
-          <span className="bg-green-400 px-3 py-1 text-xs font-black text-green-900">Finalised</span>
+          <p className="text-xs font-black uppercase tracking-widest text-white/50">{t("booking.summary.heading")}</p>
+          <span className="bg-green-400 px-3 py-1 text-xs font-black text-green-900">{t("booking.summary.finalised")}</span>
         </div>
         <div className="bg-white/10 p-4 mb-4">
-          <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">Total booking value</p>
+          <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">{t("booking.summary.totalValue")}</p>
           <p className="text-3xl font-black text-white">{fmt2(totalAmt)}</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="bg-white/10 px-3 py-2"><p className="text-xs font-black text-white/50 uppercase tracking-wide">Car hire</p><p className="font-bold text-white">{fmt2(carHireAmt)}</p></div>
-            <div className="bg-white/10 px-3 py-2"><p className="text-xs font-black text-white/50 uppercase tracking-wide">Full tank deposit</p><p className="font-bold text-white">{fmt2(fullTankAmt)}</p></div>
+            <div className="bg-white/10 px-3 py-2"><p className="text-xs font-black text-white/50 uppercase tracking-wide">{t("booking.summary.carHire")}</p><p className="font-bold text-white">{fmt2(carHireAmt)}</p></div>
+            <div className="bg-white/10 px-3 py-2"><p className="text-xs font-black text-white/50 uppercase tracking-wide">{t("booking.summary.fuelDeposit")}</p><p className="font-bold text-white">{fmt2(fullTankAmt)}</p></div>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-4">
-          {[{label:"Delivery fuel",value:fuelLabel(collFuel),bar:collFuel},{label:"Collection fuel",value:fuelLabel(retFuel),bar:retFuel},{label:"Fuel used",value:usedQ!==null?QUARTER_LABELS[usedQ]??`${usedQ}/4`:"—",bar:null},{label:"Per quarter",value:fmt2(perQtrAmt),bar:null}].map(({label,value,bar})=>(
+          {[
+            {label:t("booking.summary.deliveryFuel"),value:fuelLabel(collFuel),bar:collFuel},
+            {label:t("booking.summary.collectionFuel"),value:fuelLabel(retFuel),bar:retFuel},
+            {label:t("booking.summary.fuelUsed"),value:usedQ!==null?QUARTER_LABELS[usedQ]??`${usedQ}/4`:"—",bar:null},
+            {label:t("booking.summary.perQuarter"),value:fmt2(perQtrAmt),bar:null}
+          ].map(({label,value,bar})=>(
             <div key={label} className="bg-white/10 p-3"><p className="text-xs font-black text-white/50 uppercase tracking-wide mb-1">{label}</p><p className="font-black text-white">{value}</p>{bar&&<FuelBar level={bar} light/>}</div>
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="bg-[#ff7a00]/20 border border-[#ff7a00]/40 p-4"><p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">Fuel charge to you</p><p className="text-2xl font-black text-white">{fuelCharge!=null?fmt2(fuelCharge):"—"}</p></div>
-          <div className="bg-green-500/20 border border-green-400/40 p-4"><p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">Refund to you</p><p className="text-2xl font-black text-white">{fuelRefund!=null?fmt2(fuelRefund):"—"}</p></div>
+          <div className="bg-[#ff7a00]/20 border border-[#ff7a00]/40 p-4"><p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">{t("booking.summary.fuelCharge")}</p><p className="text-2xl font-black text-white">{fuelCharge!=null?fmt2(fuelCharge):"—"}</p></div>
+          <div className="bg-green-500/20 border border-green-400/40 p-4"><p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">{t("booking.summary.refund")}</p><p className="text-2xl font-black text-white">{fuelRefund!=null?fmt2(fuelRefund):"—"}</p></div>
         </div>
       </div>
       <div className="bg-white p-6">
-        <p className="text-xs font-black uppercase tracking-widest text-black mb-4">Booking Documents</p>
+        <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{t("booking.summary.documents")}</p>
         <CompletionStatementButton bookingId={bk.id} accessToken={accessToken} />
       </div>
     </>
-  );
-}
-
-const BAD_WORDS = ["fuck","shit","cunt","bastard","asshole","dick","bitch","wanker","puta","mierda","coño","joder","hostia","gilipollas"];
-function containsBadWords(t: string) { return BAD_WORDS.some(w=>t.toLowerCase().includes(w)); }
-
-function StarPicker({ value, onChange }: { value:number; onChange:(v:number)=>void }) {
-  const [hovered,setHovered] = useState(0);
-  return (
-    <div className="flex gap-1">
-      {[1,2,3,4,5].map(n=>(
-        <button key={n} type="button" onMouseEnter={()=>setHovered(n)} onMouseLeave={()=>setHovered(0)} onClick={()=>onChange(n)} className="text-3xl leading-none transition-transform hover:scale-110">
-          <span className={(hovered||value)>=n?"text-amber-400":"text-black/10"}>★</span>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -277,8 +278,8 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
   const [submitted,setSubmitted] = useState(!!existingReview);
   const { t } = useTranslation();
   async function submit() {
-    if (!rating) { setError("Please select a star rating."); return; }
-    if (comment&&containsBadWords(comment)) { setError("Your review contains language that is not permitted."); return; }
+    if (!rating) { setError(t("booking.review.error.rating")); return; }
+    if (comment&&containsBadWords(comment)) { setError(t("booking.review.error.badWords")); return; }
     setSaving(true); setError(null);
     try {
       const res=await fetch("/api/test-booking/reviews",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${accessToken}`},body:JSON.stringify({booking_id:bookingId,rating,comment})});
@@ -291,19 +292,19 @@ function ReviewCard({ bookingId, accessToken, existingReview, onReviewSubmitted 
   return (
     <div id="review" className="bg-white p-6">
       <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-3">⭐ {submitted ? t("booking.review.thanks") : t("booking.review.title")}</p>
-      <p className="text-sm font-semibold text-black/50 mb-4">{submitted ? t("booking.review.thanks") : "How was your experience?"}</p>
+      <p className="text-sm font-semibold text-black/50 mb-4">{submitted ? t("booking.review.thanks") : t("booking.review.experience")}</p>
       {submitted?(
         <>
           <div className="flex gap-0.5 mb-3">{[1,2,3,4,5].map(n=><span key={n} className={`text-2xl ${n<=rating?"text-amber-400":"text-black/10"}`}>★</span>)}</div>
           {comment&&<p className="text-base font-semibold text-black">{comment}</p>}
           {existingReview?.partner_reply&&(
-            <div className="mt-4 bg-[#f0f0f0] px-4 py-3"><p className="text-xs font-black uppercase tracking-widest text-black mb-1">Partner reply · {fmt(existingReview.partner_replied_at)}</p><p className="text-sm font-semibold text-black">{existingReview.partner_reply}</p></div>
+            <div className="mt-4 bg-[#f0f0f0] px-4 py-3"><p className="text-xs font-black uppercase tracking-widest text-black mb-1">{t("booking.review.partnerReply")} · {fmt(existingReview.partner_replied_at)}</p><p className="text-sm font-semibold text-black">{existingReview.partner_reply}</p></div>
           )}
         </>
       ):(
         <>
           <div className="mb-4"><StarPicker value={rating} onChange={setRating}/></div>
-          <textarea rows={3} value={comment} onChange={e=>setComment(e.target.value)} className="w-full bg-[#f0f0f0] px-4 py-3 text-sm font-medium text-black outline-none focus:bg-[#e8e8e8] placeholder:text-black/30 resize-none mb-3" placeholder="Tell us about your experience…"/>
+          <textarea rows={3} value={comment} onChange={e=>setComment(e.target.value)} className="w-full bg-[#f0f0f0] px-4 py-3 text-sm font-medium text-black outline-none focus:bg-[#e8e8e8] placeholder:text-black/30 resize-none mb-3" placeholder={t("booking.review.placeholder")}/>
           {error&&<p className="text-sm font-semibold text-red-600 mb-3">{error}</p>}
           <button type="button" onClick={submit} disabled={saving||!rating} className="w-full bg-[#ff7a00] py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
             {saving ? t("common.loading") : t("booking.review.submit")}
@@ -318,30 +319,30 @@ function InsuranceConfirmCard({ driverConfirmed,driverConfirmedAt,customerConfir
   const { t } = useTranslation();
   return (
     <div className={`p-6 ${locked?"bg-green-50 border border-green-200":"bg-white"}`}>
-      <p className="text-xs font-black uppercase tracking-widest text-black mb-1">📄 Insurance Documents</p>
-      <p className="text-sm font-semibold text-black/50 mb-4">The driver must hand you the insurance paperwork at delivery.</p>
+      <p className="text-xs font-black uppercase tracking-widest text-black mb-1">{t("booking.insurance.heading")}</p>
+      <p className="text-sm font-semibold text-black/50 mb-4">{t("booking.insurance.subtitle")}</p>
       <div className={`px-4 py-3 mb-4 ${driverConfirmed?"bg-black":"bg-[#f0f0f0]"}`}>
-        <p className={`text-xs font-black uppercase tracking-widest mb-1 ${driverConfirmed?"text-white":"text-black/50"}`}>Driver confirmed handover</p>
-        {driverConfirmed?<><p className="text-base font-black text-white">✓ Driver confirmed</p><p className="text-xs text-white/70">{fmt(driverConfirmedAt)}</p></>:<p className="text-sm font-semibold text-black/40">Waiting for driver…</p>}
+        <p className={`text-xs font-black uppercase tracking-widest mb-1 ${driverConfirmed?"text-white":"text-black/50"}`}>{t("booking.insurance.driverConfirmed")}</p>
+        {driverConfirmed?<><p className="text-base font-black text-white">✓ {t("booking.insurance.driverConfirmed")}</p><p className="text-xs text-white/70">{fmt(driverConfirmedAt)}</p></>:<p className="text-sm font-semibold text-black/40">{t("booking.insurance.driverWaiting")}</p>}
       </div>
       {locked?(
-        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">✓ Both you and the driver have confirmed insurance documents were handed over.</div>
+        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">{t("booking.insurance.bothConfirmed")}</div>
       ):(
         <>
-          {customerConfirmed&&<div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black mb-4">You confirmed receipt at {fmt(customerConfirmedAt)}</div>}
+          {customerConfirmed&&<div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black mb-4">{t("booking.insurance.youConfirmed", { time: fmt(customerConfirmedAt) })}</div>}
           {!customerConfirmed&&(
             <label className={`flex items-start gap-3 p-3 cursor-pointer mb-4 border-2 transition ${insuranceChecked?"border-green-400 bg-green-50":"border-black/10 bg-[#f0f0f0]"}`}>
               <input type="checkbox" checked={insuranceChecked} onChange={e=>onInsuranceChange(e.target.checked)} disabled={!driverConfirmed||saving} className="mt-0.5 h-5 w-5 shrink-0"/>
-              <p className="text-sm font-bold text-black">I confirm I have received the insurance documents</p>
+              <p className="text-sm font-bold text-black">{t("booking.insurance.checkbox")}</p>
             </label>
           )}
           <div className="flex gap-3">
             {!customerConfirmed?(
               <button type="button" onClick={onConfirm} disabled={saving||!driverConfirmed||!insuranceChecked} className="flex-1 bg-[#ff7a00] py-4 text-sm font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {saving?t("common.loading"):!driverConfirmed?"Waiting for driver…":!insuranceChecked?"Tick box above to confirm":"✓ Confirm receipt of documents"}
+                {saving?t("common.loading"):!driverConfirmed?t("booking.insurance.waitingDriver"):!insuranceChecked?t("booking.insurance.checkbox"):t("booking.insurance.confirmBtn")}
               </button>
             ):(
-              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):"Dispute / I did not receive them"}</button>
+              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):t("booking.insurance.dispute")}</button>
             )}
           </div>
         </>
@@ -361,25 +362,25 @@ function FuelConfirmCard({ title,effectiveFuel,effectiveReady,effectiveReadyAt,c
       <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{title}</p>
       <div className={`px-4 py-3 mb-4 ${effectiveReady&&effectiveFuel?"bg-black":"bg-[#f0f0f0]"}`}>
         <p className={`text-xs font-black uppercase tracking-widest mb-1 ${effectiveReady&&effectiveFuel?"text-white":"text-black/50"}`}>
-          {partnerOverrideActive?"Office recorded":"Driver recorded"}
+          {partnerOverrideActive ? t("booking.fuel.officeRecorded") : t("booking.fuel.driverRecorded")}
         </p>
         {effectiveReady&&effectiveFuel
-          ? <><p className="text-2xl font-black text-white">{fuelLabel(effectiveFuel)}</p><FuelBar level={effectiveFuel} light/>{partnerOverrideActive&&<p className="text-xs text-[#ff7a00] mt-1 font-black">⚠ Office override in effect</p>}<p className="text-xs text-white/70 mt-1">{fmt(effectiveReadyAt)}</p></>
-          : <p className="text-sm font-semibold text-black/40">Waiting for driver…</p>}
+          ? <><p className="text-2xl font-black text-white">{fuelLabel(effectiveFuel)}</p><FuelBar level={effectiveFuel} light/>{partnerOverrideActive&&<p className="text-xs text-[#ff7a00] mt-1 font-black">{t("booking.fuel.officeOverride")}</p>}<p className="text-xs text-white/70 mt-1">{fmt(effectiveReadyAt)}</p></>
+          : <p className="text-sm font-semibold text-black/40">{t("booking.fuel.waiting")}</p>}
       </div>
       {locked?(
-        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">✓ Confirmed — you and the {partnerOverrideActive?"office":"driver"} agree on {fuelLabel(effectiveFuel)}</div>
+        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">{t("booking.fuel.confirmed", { who: partnerOverrideActive ? t("booking.fuel.officeRecorded").toLowerCase() : t("booking.fuel.driverRecorded").toLowerCase(), level: fuelLabel(effectiveFuel) })}</div>
       ):(
         <>
-          {customerConfirmed&&<div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black mb-4">You confirmed this at {fmt(customerConfirmedAt)}</div>}
-          <textarea rows={3} value={notes} onChange={e=>onNotesChange(e.target.value)} disabled={locked} className="w-full bg-[#f0f0f0] px-4 py-3 text-sm font-medium text-black outline-none focus:bg-[#e8e8e8] disabled:opacity-50 resize-none mb-4" placeholder="Any notes…"/>
+          {customerConfirmed&&<div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black mb-4">{t("booking.fuel.youConfirmed", { time: fmt(customerConfirmedAt) })}</div>}
+          <textarea rows={3} value={notes} onChange={e=>onNotesChange(e.target.value)} disabled={locked} className="w-full bg-[#f0f0f0] px-4 py-3 text-sm font-medium text-black outline-none focus:bg-[#e8e8e8] disabled:opacity-50 resize-none mb-4" placeholder={t("booking.fuel.notesPlaceholder")}/>
           <div className="flex gap-3">
             {!customerConfirmed?(
               <button type="button" onClick={onConfirm} disabled={saving||!effectiveReady} className="flex-1 bg-[#ff7a00] py-4 text-sm font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
-                {saving?t("common.loading"):!effectiveReady?"Waiting for driver…":"✓ I agree with this fuel level"}
+                {saving?t("common.loading"):!effectiveReady?t("booking.fuel.waiting"):t("booking.fuel.agreeBtn")}
               </button>
             ):(
-              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):"Dispute / Change"}</button>
+              <button type="button" onClick={onUnconfirm} disabled={saving} className="flex-1 bg-[#f0f0f0] py-4 text-sm font-black text-black hover:bg-[#e8e8e8] disabled:opacity-50">{saving?t("common.loading"):t("booking.fuel.dispute")}</button>
             )}
           </div>
         </>
@@ -404,6 +405,11 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
   }
   const curr = bid.currency ?? "EUR";
   const fmt2 = (n: number) => fmtCurr(n, curr);
+  const reviewLabel = showReviews
+    ? t("booking.review.hideReviews")
+    : bid.review_count === 1
+    ? t("booking.review.readReviews", { count: bid.review_count })
+    : t("booking.review.readReviews.plural", { count: bid.review_count });
   return (
     <div className="bg-[#f0f0f0] p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -413,39 +419,39 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
             <div className="flex items-center gap-2 flex-wrap">
               <span>{[1,2,3,4,5].map(n=><span key={n} className={n<=Math.round(bid.avg_rating!)?"text-amber-400":"text-black/10"}>★</span>)}</span>
               <span className="text-amber-600 font-black text-sm">{bid.avg_rating.toFixed(1)}</span>
-              <button type="button" onClick={toggleReviews} className="text-sm font-bold text-black underline hover:opacity-70">{showReviews?"Hide reviews":`Read ${bid.review_count} review${bid.review_count!==1?"s":""}`}</button>
+              <button type="button" onClick={toggleReviews} className="text-sm font-bold text-black underline hover:opacity-70">{reviewLabel}</button>
             </div>
-          ):<p className="text-xs font-semibold text-black/40">No reviews yet</p>}
+          ):<p className="text-xs font-semibold text-black/40">{t("booking.bids.noReviews")}</p>}
           {showReviews&&(
             <div className="bg-white p-4 space-y-4">
-              {loadingRevs?<p className="text-sm text-black/40">{t("common.loading")}</p>:reviews.length===0?<p className="text-sm text-black/40">No reviews to show.</p>:reviews.map(r=>(
+              {loadingRevs?<p className="text-sm text-black/40">{t("common.loading")}</p>:reviews.length===0?<p className="text-sm text-black/40">{t("booking.review.noReviewsToShow")}</p>:reviews.map(r=>(
                 <div key={r.id} className="border-b border-black/5 pb-4 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2 mb-1"><span>{[1,2,3,4,5].map(n=><span key={n} className={n<=r.rating?"text-amber-400":"text-black/10"}>★</span>)}</span><span className="text-xs text-black/30">{fmt(r.created_at)}</span></div>
-                  {r.comment?<p className="text-sm font-semibold text-black">{r.comment}</p>:<p className="text-xs italic text-black/30">No written comment.</p>}
-                  {r.partner_reply&&<div className="mt-2 bg-[#f0f0f0] px-3 py-2"><p className="text-xs font-black text-black">Partner reply</p><p className="text-xs font-semibold text-black/70 mt-0.5">{r.partner_reply}</p></div>}
+                  {r.comment?<p className="text-sm font-semibold text-black">{r.comment}</p>:<p className="text-xs italic text-black/30">{t("booking.review.noComment")}</p>}
+                  {r.partner_reply&&<div className="mt-2 bg-[#f0f0f0] px-3 py-2"><p className="text-xs font-black text-black">{t("booking.review.partnerReply")}</p><p className="text-xs font-semibold text-black/70 mt-0.5">{r.partner_reply}</p></div>}
                 </div>
               ))}
             </div>
           )}
-          <p className="text-sm font-semibold text-black"><span className="font-black">Phone:</span> {bid.partner_phone||"—"}</p>
-          <p className="text-sm font-semibold text-black"><span className="font-black">Vehicle:</span> {bid.vehicle_category_name}</p>
-          <p className="text-sm font-semibold text-black"><span className="font-black">Car hire:</span> {fmt2(bid.car_hire_price)}</p>
-          <p className="text-sm font-semibold text-black"><span className="font-black">Fuel deposit:</span> {fmt2(bid.fuel_price)}</p>
-          <p className="text-sm font-semibold text-black"><span className="font-black">Total:</span> {fmt2(bid.total_price)}</p>
-          <p className="text-sm font-semibold text-black"><span className="font-black">Insurance included:</span> {bid.full_insurance_included?"Yes":"No"}</p>
-          {bid.mileage_limit&&<div className="border border-black/10 bg-white px-4 py-3 mt-2"><p className="text-sm font-black text-black mb-0.5">📏 Mileage limit</p><p className="text-sm font-semibold text-black/70">{bid.mileage_limit}</p><p className="text-xs font-semibold text-black/40 mt-1">Any excess mileage charges are payable directly to the car hire company at collection — credit card required.</p></div>}
-          {bid.security_deposit_notes&&<div className="border border-amber-200 bg-amber-50 px-4 py-3 mt-2"><p className="text-sm font-black text-amber-800 mb-0.5">💳 Security deposit required</p><p className="text-sm font-semibold text-amber-700">{bid.security_deposit_notes}</p><p className="text-xs font-semibold text-amber-600 mt-1">Payable directly to the car hire company at collection. Credit card only — debit cards cannot be used for deposit blocking.</p></div>}
-          {bid.notes&&<p className="text-sm font-semibold text-black"><span className="font-black">Notes:</span> {bid.notes}</p>}
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.phone")}:</span> {bid.partner_phone||"—"}</p>
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.vehicle")}:</span> {bid.vehicle_category_name}</p>
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.carHire")}:</span> {fmt2(bid.car_hire_price)}</p>
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.fuelDeposit")}:</span> {fmt2(bid.fuel_price)}</p>
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.total")}:</span> {fmt2(bid.total_price)}</p>
+          <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.insuranceIncluded")}:</span> {bid.full_insurance_included?t("common.yes"):t("common.no")}</p>
+          {bid.mileage_limit&&<div className="border border-black/10 bg-white px-4 py-3 mt-2"><p className="text-sm font-black text-black mb-0.5">{t("booking.bids.mileageLimit")}</p><p className="text-sm font-semibold text-black/70">{bid.mileage_limit}</p><p className="text-xs font-semibold text-black/40 mt-1">{t("booking.bids.mileageNote")}</p></div>}
+          {bid.security_deposit_notes&&<div className="border border-amber-200 bg-amber-50 px-4 py-3 mt-2"><p className="text-sm font-black text-amber-800 mb-0.5">{t("booking.bids.securityDeposit")}</p><p className="text-sm font-semibold text-amber-700">{bid.security_deposit_notes}</p><p className="text-xs font-semibold text-amber-600 mt-1">{t("booking.bids.securityNote")}</p></div>}
+          {bid.notes&&<p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.bids.notes")}:</span> {bid.notes}</p>}
         </div>
         <div className="shrink-0">
           {bid.status==="accepted"?(
-            <span className="bg-green-100 px-4 py-2 text-sm font-black text-green-800">Accepted ✓</span>
+            <span className="bg-green-100 px-4 py-2 text-sm font-black text-green-800">{t("booking.bids.accepted.badge")}</span>
           ):requestStatus==="confirmed"?(
-            <span className="bg-[#f0f0f0] px-4 py-2 text-sm font-black text-black/40">Closed</span>
+            <span className="bg-[#f0f0f0] px-4 py-2 text-sm font-black text-black/40">{t("booking.bids.closed")}</span>
           ):(
             <button type="button" onClick={()=>onAccept(bid.id)} disabled={!!acceptingId||expired}
               className="bg-[#ff7a00] px-6 py-3 text-sm font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
-              {acceptingId===bid.id?t("common.loading"):"Accept & Pay →"}
+              {acceptingId===bid.id?t("common.loading"):t("booking.bids.acceptPay")}
             </button>
           )}
         </div>
@@ -542,14 +548,14 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   useEffect(()=>{ load(true); },[requestId,authChecked]);
   useEffect(()=>{
     if (!requestId||!authChecked) return;
-    const t=setInterval(()=>load(false),10000); return ()=>clearInterval(t);
+    const ti=setInterval(()=>load(false),10000); return ()=>clearInterval(ti);
   },[requestId,authChecked]);
 
   useEffect(()=>{
     const exp=data?.request?.expires_at;
     if (!exp) { setTimeLabel("—"); setExpired(false); return; }
     const tick=()=>{ const r=getTimeRemaining(exp); setTimeLabel(r?.label||"—"); setExpired(!!r?.expired); };
-    tick(); const t=setInterval(tick,1000); return ()=>clearInterval(t);
+    tick(); const ti=setInterval(tick,1000); return ()=>clearInterval(ti);
   },[data?.request?.expires_at]);
 
   async function acceptBid(bidId: string) {
@@ -643,6 +649,22 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const hasYoungAdditional = addAges.some(n => n >= 21 && n <= 24);
   const showYoungDriverNote = isYoungMain || hasYoungAdditional;
 
+  function bookingStatusLabel(s?: string|null) {
+    switch(String(s||"").toLowerCase()) {
+      case "confirmed": case "driver_assigned": case "en_route": case "arrived": return t("booking.status.awaitingDelivery");
+      case "collected": case "returned": return t("booking.status.onHire");
+      case "completed": return t("booking.status.completed");
+      case "cancelled": return t("booking.status.cancelled");
+      default: return String(s||"—").replaceAll("_"," ");
+    }
+  }
+
+  function sportEquipmentLabel(v: string|null): string {
+    if (!v || v === "none") return t("sport.none");
+    const key = SPORT_KEY_MAP[v];
+    return key ? t(key) : v;
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <div className="w-full bg-black px-6 py-16 text-white">
@@ -650,7 +672,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">{t("bookings.title")}</p>
             <h1 className="text-4xl font-black text-white md:text-5xl">{t("booking.title")} #{req.job_number??"—"}</h1>
-            <p className="mt-3 text-base font-semibold text-white/70">Review your booking and any bids received.</p>
+            <p className="mt-3 text-base font-semibold text-white/70">{t("booking.subtitle")}</p>
           </div>
           <Link href="/bookings" className="border border-white/30 px-5 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors self-start mt-1">← {t("bookings.title")}</Link>
         </div>
@@ -663,8 +685,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <div className="border border-green-200 bg-green-50 px-4 py-4 flex items-center gap-3">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center bg-green-600 text-white font-black text-sm">✓</span>
               <div>
-                <p className="font-black text-green-800">Payment successful — your booking is confirmed!</p>
-                <p className="text-sm font-bold text-green-700">You will receive a confirmation email and receipt shortly. The car hire company has been notified.</p>
+                <p className="font-black text-green-800">{t("booking.payment.success")}</p>
+                <p className="text-sm font-bold text-green-700">{t("booking.payment.successSub")}</p>
               </div>
             </div>
           )}
@@ -674,7 +696,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
 
           {req.status==="open"&&(
             <div className={`px-4 py-3 text-sm font-bold ${expired?"bg-red-100 text-red-700":"bg-amber-100 text-amber-800"}`}>
-              <span className="font-black">Bid window:</span> {timeLabel}
+              <span className="font-black">{t("booking.bidWindow")}:</span> {timeLabel}
             </div>
           )}
 
@@ -686,9 +708,9 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
                 <div>
                   <p className="text-sm font-black text-red-700">{t("booking.cancel")}</p>
                   {isWithin48?(
-                    <p className="mt-1 text-xs font-semibold text-red-500">⚠ Your pickup is within 48 hours. If you cancel now, the car hire fee of {fmt2(carHire)} is non-refundable. Your fuel deposit of {fmt2(fuel)} will be refunded.</p>
+                    <p className="mt-1 text-xs font-semibold text-red-500">{t("booking.cancel.within48", { amount: fmt2(carHire), fuel: fmt2(fuel) })}</p>
                   ):(
-                    <p className="mt-1 text-xs font-semibold text-black/50">More than 48 hours before pickup — you will receive a full refund of {fmt2(carHire+fuel)}.</p>
+                    <p className="mt-1 text-xs font-semibold text-black/50">{t("booking.cancel.outside48", { total: fmt2(carHire+fuel) })}</p>
                   )}
                 </div>
                 {!showCancel&&<button type="button" onClick={()=>setShowCancel(true)} className="shrink-0 border border-red-300 px-4 py-2 text-sm font-black text-red-700 hover:bg-red-50 transition-colors">{t("booking.cancel")}</button>}
@@ -696,12 +718,12 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
               {showCancel&&(
                 <div className="mt-4 space-y-3">
                   <div>
-                    <label className="text-xs font-black uppercase tracking-widest text-red-700">Reason (optional)</label>
-                    <textarea rows={2} value={cancelReason} onChange={e=>setCancelReason(e.target.value)} placeholder="Tell us why you're cancelling…" className="mt-1 w-full border border-red-200 bg-[#f0f0f0] px-3 py-2.5 text-sm font-medium text-black outline-none focus:border-red-400 resize-none"/>
+                    <label className="text-xs font-black uppercase tracking-widest text-red-700">{t("booking.cancel.reason")}</label>
+                    <textarea rows={2} value={cancelReason} onChange={e=>setCancelReason(e.target.value)} placeholder={t("booking.cancel.reasonPlaceholder")} className="mt-1 w-full border border-red-200 bg-[#f0f0f0] px-3 py-2.5 text-sm font-medium text-black outline-none focus:border-red-400 resize-none"/>
                   </div>
                   <div className="flex gap-3">
-                    <button type="button" onClick={cancelBooking} disabled={cancelling} className="bg-red-600 px-6 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 transition-colors">{cancelling?t("common.loading"):"Confirm Cancellation"}</button>
-                    <button type="button" onClick={()=>setShowCancel(false)} disabled={cancelling} className="border border-black/20 px-6 py-3 text-sm font-black text-black hover:bg-black/5 transition-colors">Keep Booking</button>
+                    <button type="button" onClick={cancelBooking} disabled={cancelling} className="bg-red-600 px-6 py-3 text-sm font-black text-white hover:bg-red-700 disabled:opacity-50 transition-colors">{cancelling?t("common.loading"):t("booking.cancel.confirm")}</button>
+                    <button type="button" onClick={()=>setShowCancel(false)} disabled={cancelling} className="border border-black/20 px-6 py-3 text-sm font-black text-black hover:bg-black/5 transition-colors">{t("booking.cancel.keep")}</button>
                   </div>
                 </div>
               )}
@@ -709,94 +731,94 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
           )}
 
           <div className="bg-white p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-black mb-5">Booking Details</p>
+            <p className="text-xs font-black uppercase tracking-widest text-black mb-5">{t("booking.details.heading")}</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {[
-                [t("bookings.pickup"),      req.pickup_address],
-                [t("bookings.dropoff"),     req.dropoff_address||"—"],
-                ["Pickup time",             fmt(req.pickup_at)],
-                ["Drop-off time",           fmt(req.dropoff_at)],
-                ["Duration",                formatDuration(req.journey_duration_minutes)],
-                [t("home.passengers"),      req.passengers],
-                [t("home.suitcases"),       req.suitcases],
-                ["Sport equipment",         sportEquipmentLabel(req.sport_equipment)],
-                ["Vehicle",                 req.vehicle_category_name||"—"],
-                [t("home.mainDriverAge"),   req.driver_age ?? "—"],
-                [t("home.additionalDrivers"), req.additional_drivers > 0
+                [t("bookings.pickup"),                   req.pickup_address],
+                [t("bookings.dropoff"),                  req.dropoff_address||"—"],
+                [t("booking.details.pickupTime"),        fmt(req.pickup_at)],
+                [t("booking.details.dropoffTime"),       fmt(req.dropoff_at)],
+                [t("booking.details.duration"),          formatDuration(req.journey_duration_minutes)],
+                [t("home.passengers"),                   req.passengers],
+                [t("home.suitcases"),                    req.suitcases],
+                [t("booking.details.sportEquipment"),    sportEquipmentLabel(req.sport_equipment)],
+                [t("booking.details.vehicle"),           req.vehicle_category_name||"—"],
+                [t("home.mainDriverAge"),                req.driver_age ?? "—"],
+                [t("home.additionalDrivers"),            req.additional_drivers > 0
                   ? `${req.additional_drivers} (ages: ${req.additional_driver_ages || "—"})`
                   : t("home.additionalDrivers.none")],
-                ["Status", req.status],
+                [t("booking.details.status"),            req.status],
               ].map(([l,v])=>(
                 <p key={String(l)} className="text-sm font-semibold text-black"><span className="font-black">{l}:</span> {String(v)}</p>
               ))}
-              {bk&&<p className="text-sm font-semibold text-black sm:col-span-2"><span className="font-black">Booking currency:</span> {bk.currency ?? "EUR"}</p>}
-              {req.notes&&<p className="text-sm font-semibold text-black sm:col-span-2"><span className="font-black">Notes:</span> {req.notes}</p>}
+              {bk&&<p className="text-sm font-semibold text-black sm:col-span-2"><span className="font-black">{t("booking.details.bookingCurrency")}:</span> {bk.currency ?? "EUR"}</p>}
+              {req.notes&&<p className="text-sm font-semibold text-black sm:col-span-2"><span className="font-black">{t("booking.details.notes")}:</span> {req.notes}</p>}
             </div>
           </div>
 
           {showYoungDriverNote && (
             <div className="border border-amber-300 bg-amber-50 px-4 py-3">
               <p className="text-sm font-black text-amber-800 mb-1">{t("home.youngDriver.title")}</p>
-              <p className="text-sm font-semibold text-amber-700">One or more drivers on this booking are aged 21–24. Car hire companies may include a young driver surcharge in their bid price.</p>
+              <p className="text-sm font-semibold text-amber-700">{t("home.youngDriver.body")}</p>
             </div>
           )}
 
           {bk&&!isCancelled&&(
             <>
               <div className="bg-white p-6 border-l-4 border-green-500">
-                <p className="text-xs font-black uppercase tracking-widest text-black mb-5">Your Confirmed Booking</p>
+                <p className="text-xs font-black uppercase tracking-widest text-black mb-5">{t("booking.confirmed.heading")}</p>
                 <div className="grid gap-3 sm:grid-cols-2 mb-5">
                   {[
-                    ["Status",           bookingStatusLabel(bk.booking_status)],
-                    ["Car hire company", bk.company_name||"—"],
-                    ["Company phone",    bk.company_phone||"—"],
-                    ["Driver",           bk.driver_name||"—"],
-                    ["Driver phone",     bk.driver_phone||"—"],
-                    ["Vehicle",          bk.driver_vehicle||"—"],
+                    [t("booking.confirmed.status"),       bookingStatusLabel(bk.booking_status)],
+                    [t("booking.confirmed.company"),      bk.company_name||"—"],
+                    [t("booking.confirmed.companyPhone"), bk.company_phone||"—"],
+                    [t("booking.confirmed.driver"),       bk.driver_name||"—"],
+                    [t("booking.confirmed.driverPhone"),  bk.driver_phone||"—"],
+                    [t("booking.confirmed.vehicle"),      bk.driver_vehicle||"—"],
                   ].map(([l,v])=>(
                     <p key={String(l)} className="text-sm font-semibold text-black"><span className="font-black">{l}:</span> {String(v)}</p>
                   ))}
                 </div>
                 <div className="bg-[#f0f0f0] p-4 space-y-2 mb-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-black mb-3">Price Breakdown</p>
-                  <div className="flex justify-between text-sm font-semibold text-black"><span>Car hire</span><span>{fmt2(Number(bk.car_hire_price||0))}</span></div>
-                  <div className="flex justify-between text-sm font-semibold text-black"><span>Full tank deposit <span className="text-black/40">(refundable)</span></span><span>{fmt2(Number(bk.fuel_price||0))}</span></div>
-                  <div className="flex justify-between text-sm font-black text-black border-t border-black/10 pt-2"><span>Total paid</span><span>{fmt2(Number(bk.amount||0))}</span></div>
+                  <p className="text-xs font-black uppercase tracking-widest text-black mb-3">{t("booking.confirmed.priceBreakdown")}</p>
+                  <div className="flex justify-between text-sm font-semibold text-black"><span>{t("booking.confirmed.carHire")}</span><span>{fmt2(Number(bk.car_hire_price||0))}</span></div>
+                  <div className="flex justify-between text-sm font-semibold text-black"><span>{t("booking.confirmed.fuelDeposit")} <span className="text-black/40">{t("booking.confirmed.fuelDepositNote")}</span></span><span>{fmt2(Number(bk.fuel_price||0))}</span></div>
+                  <div className="flex justify-between text-sm font-black text-black border-t border-black/10 pt-2"><span>{t("booking.confirmed.totalPaid")}</span><span>{fmt2(Number(bk.amount||0))}</span></div>
                 </div>
                 {(bk.mileage_limit || bk.security_deposit_notes) && (
                   <div className="bg-[#f0f0f0] p-4 space-y-2 mb-4">
-                    <p className="text-xs font-black uppercase tracking-widest text-black mb-3">Additional Terms</p>
-                    {bk.mileage_limit && <p className="text-sm font-semibold text-black"><span className="font-black">Mileage limit:</span> {bk.mileage_limit}</p>}
-                    {bk.security_deposit_notes && <p className="text-sm font-semibold text-black"><span className="font-black">Security deposit:</span> {bk.security_deposit_notes}</p>}
-                    <p className="text-xs font-semibold text-black/50 pt-1">These are arrangements between you and the car hire company, payable directly at collection. Credit card only.</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-black mb-3">{t("booking.confirmed.additionalTerms")}</p>
+                    {bk.mileage_limit && <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.confirmed.mileageLimit")}:</span> {bk.mileage_limit}</p>}
+                    {bk.security_deposit_notes && <p className="text-sm font-semibold text-black"><span className="font-black">{t("booking.confirmed.securityDeposit")}:</span> {bk.security_deposit_notes}</p>}
+                    <p className="text-xs font-semibold text-black/50 pt-1">{t("booking.confirmed.additionalTermsNote")}</p>
                   </div>
                 )}
                 <div className="mb-4"><ReceiptDownloadButton bookingId={bk.id} accessToken={accessToken}/></div>
                 <div className="bg-[#f0f0f0] p-4 mb-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-black mb-3">📋 What to bring when collecting your car</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-black mb-3">{t("booking.confirmed.whatToBring")}</p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {[
-                      { icon:"🪪", title:"Driving licence — all drivers", desc:"Full EU licence in Roman alphabet. If your licence does not meet this, bring an international driving permit alongside your original." },
-                      { icon:"🛂", title:"Passport or national ID — all drivers", desc:"A valid passport or national identity document for every driver on this booking." },
-                      { icon:"📄", title:"Photocopies recommended", desc:"Bring a photocopy of your driving licence and passport for all drivers. Some companies require these for their records." },
+                      { icon:"🪪", titleKey:"booking.confirmed.bring1.title", descKey:"booking.confirmed.bring1.desc" },
+                      { icon:"🛂", titleKey:"booking.confirmed.bring2.title", descKey:"booking.confirmed.bring2.desc" },
+                      { icon:"📄", titleKey:"booking.confirmed.bring3.title", descKey:"booking.confirmed.bring3.desc" },
                     ].map(item=>(
-                      <div key={item.title} className="flex items-start gap-3 bg-white px-4 py-3">
+                      <div key={item.titleKey} className="flex items-start gap-3 bg-white px-4 py-3">
                         <span className="text-xl shrink-0 mt-0.5">{item.icon}</span>
-                        <div><p className="text-sm font-black text-black">{item.title}</p><p className="text-xs font-semibold text-black/60 mt-0.5">{item.desc}</p></div>
+                        <div><p className="text-sm font-black text-black">{t(item.titleKey)}</p><p className="text-xs font-semibold text-black/60 mt-0.5">{t(item.descKey)}</p></div>
                       </div>
                     ))}
                     {bk.security_deposit_notes&&(
                       <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 px-4 py-3 sm:col-span-2">
                         <span className="text-xl shrink-0 mt-0.5">💳</span>
-                        <div><p className="text-sm font-black text-amber-800">Credit card required at collection</p><p className="text-xs font-semibold text-amber-700 mt-0.5">{bk.security_deposit_notes} Credit card only — debit cards cannot be used for deposit blocking.</p></div>
+                        <div><p className="text-sm font-black text-amber-800">{t("booking.confirmed.creditCardTitle")}</p><p className="text-xs font-semibold text-amber-700 mt-0.5">{bk.security_deposit_notes} {t("booking.confirmed.creditCardNote")}</p></div>
                       </div>
                     )}
                   </div>
-                  <p className="mt-3 text-xs font-semibold text-black/50">All documents must be originals — digital copies and mobile photos are not accepted.</p>
+                  <p className="mt-3 text-xs font-semibold text-black/50">{t("booking.confirmed.docsNote")}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {bk.company_phone&&<a href={`https://wa.me/${bk.company_phone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-green-500 px-4 py-2 text-xs font-black text-white hover:bg-green-600">💬 WhatsApp Car Hire Company</a>}
-                  {bk.driver_phone&&<a href={`https://wa.me/${bk.driver_phone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-green-500 px-4 py-2 text-xs font-black text-white hover:bg-green-600">💬 WhatsApp Driver</a>}
+                  {bk.company_phone&&<a href={`https://wa.me/${bk.company_phone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-green-500 px-4 py-2 text-xs font-black text-white hover:bg-green-600">{t("booking.confirmed.whatsappCompany")}</a>}
+                  {bk.driver_phone&&<a href={`https://wa.me/${bk.driver_phone.replace(/\D/g,"")}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 bg-green-500 px-4 py-2 text-xs font-black text-white hover:bg-green-600">{t("booking.confirmed.whatsappDriver")}</a>}
                 </div>
               </div>
 
@@ -812,18 +834,18 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
               />
 
               <div className="grid gap-4 xl:grid-cols-2">
-                <FuelConfirmCard title="Delivery Fuel" effectiveFuel={effectiveCollFuel} effectiveReady={collEffectiveReady} effectiveReadyAt={collReadyAt??null} customerConfirmed={bk.collection_confirmed_by_customer} customerConfirmedAt={bk.collection_confirmed_by_customer_at} locked={collectionLocked} notes={collectionNotes} onNotesChange={setCollectionNotes} onConfirm={()=>saveConfirmation("collection",true)} onUnconfirm={()=>saveConfirmation("collection",false)} saving={savingConfirm==="collection"} partnerOverrideActive={!!normalizeFuel(bk.collection_fuel_level_partner)}/>
-                <FuelConfirmCard title="Collection Fuel" effectiveFuel={effectiveRetFuel} effectiveReady={retEffectiveReady} effectiveReadyAt={retReadyAt??null} customerConfirmed={bk.return_confirmed_by_customer} customerConfirmedAt={bk.return_confirmed_by_customer_at} locked={returnLocked} notes={returnNotes} onNotesChange={setReturnNotes} onConfirm={()=>saveConfirmation("return",true)} onUnconfirm={()=>saveConfirmation("return",false)} saving={savingConfirm==="return"} partnerOverrideActive={!!normalizeFuel(bk.return_fuel_level_partner)}/>
+                <FuelConfirmCard title={t("booking.fuel.delivery")} effectiveFuel={effectiveCollFuel} effectiveReady={collEffectiveReady} effectiveReadyAt={collReadyAt??null} customerConfirmed={bk.collection_confirmed_by_customer} customerConfirmedAt={bk.collection_confirmed_by_customer_at} locked={collectionLocked} notes={collectionNotes} onNotesChange={setCollectionNotes} onConfirm={()=>saveConfirmation("collection",true)} onUnconfirm={()=>saveConfirmation("collection",false)} saving={savingConfirm==="collection"} partnerOverrideActive={!!normalizeFuel(bk.collection_fuel_level_partner)}/>
+                <FuelConfirmCard title={t("booking.fuel.collection")} effectiveFuel={effectiveRetFuel} effectiveReady={retEffectiveReady} effectiveReadyAt={retReadyAt??null} customerConfirmed={bk.return_confirmed_by_customer} customerConfirmedAt={bk.return_confirmed_by_customer_at} locked={returnLocked} notes={returnNotes} onNotesChange={setReturnNotes} onConfirm={()=>saveConfirmation("return",true)} onUnconfirm={()=>saveConfirmation("return",false)} saving={savingConfirm==="return"} partnerOverrideActive={!!normalizeFuel(bk.return_fuel_level_partner)}/>
               </div>
             </>
           )}
 
           <div className="bg-white p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-black mb-5">{bk?"Accepted Bid":"Car Hire Company Bids"}</p>
+            <p className="text-xs font-black uppercase tracking-widest text-black mb-5">{bk ? t("booking.bids.accepted") : t("booking.bids.heading")}</p>
             {expired||req.status==="expired"?(
-              <p className="text-sm font-semibold text-red-600">This request has expired.</p>
+              <p className="text-sm font-semibold text-red-600">{t("booking.bids.expired")}</p>
             ):data.bids.length===0?(
-              <p className="text-sm font-semibold text-black/50">No bids yet — car hire companies in your area will be notified shortly.</p>
+              <p className="text-sm font-semibold text-black/50">{t("booking.bids.noBids")}</p>
             ):(
               <div className="space-y-3">
                 {data.bids.map(bid=>(
