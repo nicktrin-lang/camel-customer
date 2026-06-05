@@ -76,17 +76,17 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | `lib/portal/syncBookingStatuses.ts` | Booking status sync logic |
 | `lib/portal/refreshPartnerLiveStatus.ts` | Core live status — checks all 7 requirements |
 | `lib/portal/triggerPartnerLiveRefresh.ts` | Triggers the live status refresh |
-| `lib/portal/operatingRules.ts` | Shared OPERATING_RULES data + downloadOperatingRulesPDF(). Includes section 3b — mileage limits & security deposits |
-| `lib/portal/completeBooking.tsx` | Shared completion logic — Stripe fuel refund, payout_status=ready, generates + emails completion statement PDF to customer. Sends rich completion email with fuel summary, thank you message and PDF attachment. Uses direct REST fetch to portal Supabase (single project) to query `customer_requests`. Logo read from disk via `fs.readFileSync`. |
+| `lib/portal/operatingRules.ts` | Shared OPERATING_RULES + OPERATING_RULES_ES data + downloadOperatingRulesPDF(companyName, locale). Includes section 3b — mileage limits & security deposits. Bilingual PDF when locale="es". |
+| `lib/portal/completeBooking.tsx` | Shared completion logic — Stripe fuel refund, payout_status=ready, generates + emails completion statement PDF to customer. Sends rich completion email with fuel summary + payout summary (commission breakdown) to partner in their communication_locale. Admin email includes full commission breakdown. Uses direct REST fetch to portal Supabase to query `customer_requests`. Logo read from disk via `fs.readFileSync`. |
 | `lib/portal/generateCommissionInvoice.tsx` | Commission invoice PDF generator — uses `created_at` from `partner_bookings` as the date column (pickup_at does not exist on that table). Shows all bookings including zero-commission cancelled ones. |
-| `lib/portal/partnerTerms.ts` | **Single source of truth** for partner T&Cs — `PARTNER_TERMS`, `TERMS_VERSION`, `TERMS_EFFECTIVE`, `downloadPartnerTermsPDF()`. Both `signup/page.tsx` and `terms/page.tsx` import from here. Never duplicate terms content. |
+| `lib/portal/partnerTerms.ts` | **Single source of truth** for partner T&Cs — `PARTNER_TERMS`, `PARTNER_TERMS_ES`, `TERMS_VERSION`, `TERMS_EFFECTIVE`, `downloadPartnerTermsPDF(locale)`. Both `signup/page.tsx` and `terms/page.tsx` import from here. Bilingual PDF when locale="es". Never duplicate terms content. |
 | `lib/rateLimit.ts` | In-memory rate limiter — 3 req / 15 min per IP |
 | `lib/hcaptcha.ts` | Server-side hCaptcha token verification |
 | `lib/currency.ts` | All currency utilities — EUR, GBP, USD formatting + conversion |
 | `lib/useCurrency.ts` | React hook — currency state, live rates, fmt helpers |
-| `lib/email.ts` | Resend email sender — all notification helpers. Supports `attachments` array (base64). `sendReviewReminderEmail` links to `${NEXT_PUBLIC_SITE_URL}/bookings/${requestId}#review` — ensure `NEXT_PUBLIC_SITE_URL=https://www.camel-global.com` is set in camel-customer Vercel env vars. |
+| `lib/email.ts` | Resend email sender — all notification helpers. Supports `attachments` array (base64). Partner-facing emails (`sendApplicationReceivedEmail`, `sendApprovalEmail`, `sendRejectionEmail`, `sendAccountLiveEmail`) accept optional `locale: "en" \| "es"` param (default "en"). Customer emails stay English only. `sendReviewReminderEmail` links to `${NEXT_PUBLIC_SITE_URL}/bookings/${requestId}#review`. |
 | `lib/i18n/LanguageContext.tsx` | Language context + provider + localStorage + browser locale detection |
-| `lib/i18n/useTranslation.ts` | `t()` hook — dot-notation keys, `{{var}}` interpolation, English fallback |
+| `lib/i18n/useTranslation.ts` | `t()` hook — dot-notation keys, `{{var}}` interpolation, English fallback. Returns `{ t, locale }`. |
 | `lib/i18n/LanguageToggle.tsx` | EN \| ES toggle component — drop into any header |
 | `lib/i18n/locales/en.json` | English strings — all translated pages |
 | `lib/i18n/locales/es.json` | Spanish strings — all translated pages |
@@ -105,11 +105,26 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 
 ### How it works
 - All user-facing strings live in `lib/i18n/locales/en.json` and `lib/i18n/locales/es.json`
-- `useTranslation()` hook returns the right string based on current locale
+- `useTranslation()` hook returns `{ t, locale }` based on current locale
 - Language preference stored in `localStorage` key `camel_locale`
 - Browser locale auto-detected on first visit: `es*` → Spanish, `en*` → English, anything else → English
 - `LanguageProvider` wraps the entire app via `app/ClientRootLayout.tsx`
 - `LanguageToggle` component renders EN | ES buttons — active locale highlighted in orange
+
+### Partner communication locale (CRITICAL)
+- Partners have a `communication_locale` column on `partner_profiles` (TEXT, default 'en', CHECK IN ('en','es'))
+- Set via **Settings → Communication Language** section (two big buttons, saves immediately to DB)
+- Used by `completeBooking.tsx` to send completion email in partner's language
+- Used by `sendApplicationReceivedEmail` in `complete-signup/route.ts` (derived from country field at signup)
+- Admin-triggered emails (approval, rejection, live) currently default to English — to send in partner's locale, read `communication_locale` from DB before calling those email functions
+
+### PDF locale behaviour
+- `downloadPartnerTermsPDF(locale)` — English-only PDF for "en", bilingual (EN then ES with legal caveat) for "es"
+- `downloadOperatingRulesPDF(companyName, locale)` — same pattern
+- All partner PDF download buttons pass `locale as "en" | "es"` from `useTranslation()`
+- Page content (clause text) also switches between `PARTNER_TERMS` / `PARTNER_TERMS_ES` and `OPERATING_RULES` / `OPERATING_RULES_ES` based on locale
+- Commission invoice PDF — **stays English** — NTUK is a UK company
+- ⚠️ Spanish T&Cs and Operating Rules PDF content need legal review before publishing to real partners
 
 ### Translation file key structure
 Keys use dot notation grouped by page/feature:
@@ -128,7 +143,7 @@ Keys use dot notation grouped by page/feature:
 - `fleet.*` — partner fleet
 - `drivers.*` — partner drivers
 - `reviews.*` — partner reviews
-- `settings.*` — partner settings
+- `settings.*` — partner settings (includes `settings.language.*` for communication locale UI)
 - `suggestions.*` — partner suggestions
 - `terms.*` — partner terms page UI
 - `rules.*` — operating rules page UI
@@ -140,70 +155,25 @@ Keys use dot notation grouped by page/feature:
 - `driver.*` — all driver portal pages
 - `booking.status.*` — booking status labels
 
-### Adding a new language (future)
-1. Create `lib/i18n/locales/it.json` (or `pt`, `fr`, `de`)
-2. Add the locale code to `LanguageContext.tsx` `Locale` type and `detectLocale()` logic
-3. Add button to `LanguageToggle.tsx`
-4. No other code changes needed — `useTranslation` falls back to English for any missing key
-
 ---
 
 ## i18n Translation Status — camel-portal
 
 ### ✅ Phase 1 — Partner portal core (Complete)
-| Page/Component | File |
-|---------------|------|
-| Portal homepage | `app/page.tsx` + `app/HomePageContent.tsx` |
-| Partner signup (all 5 steps) | `app/partner/signup/page.tsx` |
-| Partner onboarding (all 7 steps) | `app/partner/onboarding/page.tsx` |
-| Partner dashboard | `app/partner/dashboard/page.tsx` |
-| Portal sidebar | `app/components/portal/PortalSidebar.tsx` |
-| Portal topbar | `app/components/portal/PortalTopbar.tsx` |
-| Partner login + forgot password | `app/partner/login/page.tsx` |
-| Application submitted | `app/partner/application-submitted/page.tsx` |
-| Reset password | `app/partner/reset-password/page.tsx` |
-
 ### ✅ Phase 2 — Partner portal remaining pages (Complete)
-| Page/Component | File |
-|---------------|------|
-| Partner account | `app/partner/account/page.tsx` |
-| Partner profile | `app/partner/profile/page.tsx` |
-| Partner bookings list | `app/partner/bookings/page.tsx` |
-| Partner booking detail | `app/partner/bookings/[id]/page.tsx` |
-| Partner requests list | `app/partner/requests/page.tsx` |
-| Partner request detail | `app/partner/requests/[id]/page.tsx` |
-| Partner reports | `app/partner/reports/page.tsx` |
-| Partner fleet | `app/partner/fleet/page.tsx` |
-| Partner drivers | `app/partner/drivers/page.tsx` |
-| Partner reviews | `app/partner/reviews/page.tsx` |
-| Partner settings | `app/partner/settings/page.tsx` |
-| Partner suggestions | `app/partner/suggestions/page.tsx` |
-| Partner terms page | `app/partner/terms/page.tsx` |
-| Partner operating rules | `app/partner/operating-rules/page.tsx` |
-| Partner about | `app/partner/about/page.tsx` |
-| Partner contact | `app/partner/contact/page.tsx` |
-| Partner privacy | `app/partner/privacy/page.tsx` |
-| Partner cookies | `app/partner/cookies/page.tsx` |
-| Portal footer | `app/components/Footer.tsx` |
-
 ### ✅ Phase 3 — Driver portal (Complete)
-| Page/Component | File |
-|---------------|------|
-| Driver login + forgot password | `app/driver/login/page.tsx` |
-| Driver signup | `app/driver/signup/page.tsx` |
-| Driver reset password | `app/driver/reset-password/page.tsx` |
-| Driver jobs | `app/driver/jobs/page.tsx` |
+### ✅ Phase 4 — Partner emails + PDFs (Complete)
 
-### ❌ Phase 4 — Partner emails + PDFs (Next priority)
-| Item | File | Notes |
-|------|------|-------|
-| Partner-facing emails | `lib/email.ts` | All partner notification content |
-| Partner T&Cs PDF content | `lib/portal/partnerTerms.ts` | Legal — review Spanish before publishing |
-| Operating rules PDF content | `lib/portal/operatingRules.ts` | Legal — review Spanish before publishing |
-| Commission invoice PDF | `lib/portal/generateCommissionInvoice.tsx` | **Keep English** — NTUK is a UK company |
+| Item | File | Status |
+|------|------|--------|
+| Partner-facing emails | `lib/email.ts` | ✅ EN/ES |
+| Partner T&Cs PDF | `lib/portal/partnerTerms.ts` | ✅ Bilingual PDF (⚠️ legal review needed) |
+| Operating rules PDF | `lib/portal/operatingRules.ts` | ✅ Bilingual PDF (⚠️ legal review needed) |
+| Completion email to partner | `lib/portal/completeBooking.tsx` | ✅ EN/ES via communication_locale |
+| Commission invoice PDF | `lib/portal/generateCommissionInvoice.tsx` | ✅ Stays English (NTUK) |
 
-### ❌ Phase 5 — Customer site (Pending)
-All customer-facing pages, emails, booking receipt PDF, completion statement PDF.
+### ❌ Phase 5 — Customer site (Next priority)
+All customer-facing pages in `camel-customer`. Zero i18n infrastructure exists yet.
 
 ### ❌ Phase 6 — Future languages (Future)
 IT, PT, FR, DE — add a new JSON file, zero code changes needed.
@@ -214,12 +184,12 @@ IT, PT, FR, DE — add a new JSON file, zero code changes needed.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **Phase 1 — Partner portal core** | Homepage, signup, onboarding, dashboard, sidebar, login, auth pages | ✅ Done |
-| **Phase 2 — Partner portal remaining** | Account, profile, bookings, requests, reports, fleet, drivers, reviews, settings, suggestions, all legal/info pages, footer | ✅ Done |
-| **Phase 3 — Driver portal** | Login, signup, reset password, jobs | ✅ Done |
-| **Phase 4 — Partner emails + PDFs** | `lib/email.ts`, `partnerTerms.ts`, `operatingRules.ts` | 🔴 Next |
-| **Phase 5 — Customer site** | All customer pages, emails, PDFs | 🔲 Pending |
-| **Phase 6 — Future languages** | IT, PT, FR, DE | 🔲 Future |
+| **Phase 1** | Homepage, signup, onboarding, dashboard, sidebar, login, auth pages | ✅ Done |
+| **Phase 2** | Account, profile, bookings, requests, reports, fleet, drivers, reviews, settings, suggestions, all legal/info pages, footer | ✅ Done |
+| **Phase 3** | Driver portal — login, signup, reset password, jobs | ✅ Done |
+| **Phase 4** | Partner emails + bilingual PDFs + partner communication locale | ✅ Done |
+| **Phase 5** | Customer site — all pages, emails, PDFs | 🔴 Next |
+| **Phase 6** | IT, PT, FR, DE | 🔲 Future |
 
 ---
 
@@ -229,7 +199,7 @@ IT, PT, FR, DE — add a new JSON file, zero code changes needed.
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_CUSTOMER_SUPABASE_URL` point to the same project
 - `SUPABASE_SERVICE_ROLE_KEY` and `CUSTOMER_SUPABASE_SERVICE_ROLE_KEY` are the same key
 - `completeBooking.tsx` uses a direct REST fetch with `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to query `customer_requests`
-- `customer_requests` table has RLS enabled with a permissive policy (`USING (true)`) — added Chat 38
+- `customer_requests` table has RLS enabled with a permissive policy (`USING (true)`)
 
 ---
 
@@ -238,6 +208,7 @@ IT, PT, FR, DE — add a new JSON file, zero code changes needed.
 2. Calls `POST /api/internal/complete-booking` on the portal with `CRON_SECRET`
 3. `app/api/internal/complete-booking/route.ts` (camel-portal) validates secret and calls `completeBooking()`
 4. `completeBooking()` issues Stripe fuel refund, sends customer + partner + admin emails with PDF
+5. Partner email language is determined by `partner_profiles.communication_locale`
 
 ---
 
@@ -293,6 +264,15 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 
 ---
 
+## Partner Communication Locale Architecture (CRITICAL)
+- Column: `partner_profiles.communication_locale` TEXT NOT NULL DEFAULT 'en' CHECK IN ('en','es')
+- Set by partner in: `app/partner/settings/page.tsx` → "Communication Language" section
+- Auto-detected at signup: `complete-signup/route.ts` derives locale from country field (Spain → 'es')
+- Used in: `completeBooking.tsx` (reads `communication_locale` from partner_profiles)
+- Admin-triggered emails still default English — future improvement: look up locale before sending
+
+---
+
 ## Partner Approval Gate (CRITICAL)
 - Unapproved partners are blocked from all portal pages except: dashboard, account, profile, info pages
 - Enforced in `app/partner/layout.tsx` via approval check after auth
@@ -332,6 +312,7 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 - Partner signup: stepper shows circles only on mobile, active step label only below
 - Partner onboarding: `Card` uses `p-4 sm:p-8`, `NavButtons` uses `flex-wrap`
 - Footer copyright: single `<p>` with `text-xs` — never two side-by-side `<p>` tags
+- **⚠️ KNOWN ISSUE — Mobile header language toggle overflow:** On mobile, all portal headers (partner, driver, public pages) the EN/ES language toggle causes header overflow. Needs a mobile-friendly solution in Chat 42 — options: hamburger menu, collapsed toggle, or icon-only on mobile. Affects `app/driver/layout.tsx`, `app/components/portal/PortalTopbar.tsx`, `app/partner/signup/page.tsx`, and any page with a standalone header.
 
 ---
 
@@ -358,6 +339,7 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 | `v-stable-chat39-pre-i18n` | Chat 39 — stable before i18n infrastructure added |
 | `v-stable-chat39-i18n-partner-signup-onboarding` | Chat 39 — partner portal i18n Phase 1 complete |
 | `v-stable-chat40-i18n-complete` | Chat 40 — full partner portal + driver portal i18n EN/ES complete |
+| `v-stable-chat41-complete` | Chat 41 — Phase 4 complete: partner emails EN/ES, bilingual PDFs, partner communication locale, completion email payout summary, driver job filter cards |
 
 ### Customer (`~/camel-customer`)
 | Tag | Description |
@@ -366,11 +348,12 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 | `v-stable-chat37-homepage-layout` | Chat 37 — homepage layout, date picker, Book Now fixed |
 | `v-stable-chat38-pre-spanish` | Chat 38 — completion email, logo on PDFs, currency locked at onboarding |
 | `v-stable-chat39-complete` | Chat 39 complete — testing done, security hardened, ready for Spanish translation |
+| `v-stable-chat41-complete` | Chat 41 — no customer changes this chat |
 
 ### Rollback
 ```bash
-cd ~/camel-portal && git checkout v-stable-chat40-i18n-complete
-cd ~/camel-customer && git checkout v-stable-chat39-complete
+cd ~/camel-portal && git checkout v-stable-chat41-complete
+cd ~/camel-customer && git checkout v-stable-chat41-complete
 ```
 
 ---
@@ -379,7 +362,7 @@ cd ~/camel-customer && git checkout v-stable-chat39-complete
 - Customer booking flow — homepage, date picker, driver age, Book Now layout correct all screen sizes
 - Guest booking flow — draft survives login/signup redirect
 - Partner bid submission and management
-- Driver job portal
+- Driver job portal — fully translated EN/ES, language toggle in header, clickable stat cards filter jobs by category
 - Admin approval and account management
 - Partner approval gate — unapproved partners blocked from portal until approved
 - Full EUR / GBP / USD currency support
@@ -388,7 +371,9 @@ cd ~/camel-customer && git checkout v-stable-chat39-complete
 - Fuel refund on completion — Stripe partial refund issued automatically
 - Email notifications — all flows (booking confirmed, completion, review reminder)
 - Review reminder email — correct URL with `NEXT_PUBLIC_SITE_URL`
-- Completion email + PDF attachment
+- Completion email + PDF attachment (customer)
+- Completion email to partner — EN/ES, includes fuel summary + payout summary with commission breakdown
+- Admin completion email — includes car hire price, commission, partner net payout, final amount
 - Completion statement PDF + booking receipt PDF — all with logo
 - Customer password reset
 - Live status system — 7 checks
@@ -400,48 +385,65 @@ cd ~/camel-customer && git checkout v-stable-chat39-complete
 - All financial reporting — admin reports, partner reports, CSV exports
 - Admin currency override — from account detail page
 - Application-submitted page — status-aware (pending/rejected/guest)
-- Mobile layout — all pages fit correctly on mobile
+- Mobile layout — all pages fit correctly on mobile (⚠️ except language toggle in headers — see Known Issues)
 - Footer copyright — single line, no overflow on mobile
 - Security — CSP form-action, Stripe Radar, Stripe 2FA, GitHub branch protection, Vercel notifications, all 2FA done
 - Chat widget — scoped to logged-in user's data only (both customer and partner)
-- **i18n infrastructure** — LanguageContext, useTranslation, LanguageToggle, EN/ES JSON files
+- **i18n infrastructure** — LanguageContext, useTranslation (returns `{ t, locale }`), LanguageToggle, EN/ES JSON files
 - **Partner portal fully translated EN/ES** — all pages including legal, about, contact, footer
 - **Driver portal fully translated EN/ES** — login, signup, reset password, jobs
+- **Phase 4 complete** — partner emails EN/ES, bilingual T&Cs + operating rules PDFs, partner communication locale preference in settings
+- **Terms and operating rules pages** — render clause content in correct language (PARTNER_TERMS_ES / OPERATING_RULES_ES)
 
 ---
 
-## What Needs Building — Next Chat (Chat 41)
+## What Needs Building — Next Chat (Chat 42)
 
-### 🔴 Priority 1 — Phase 4: Partner emails (EN/ES)
-Translate all partner-facing email content in `lib/email.ts`. This is the main remaining i18n gap — partners in Spain receive English emails. Approach: add a `locale` parameter to each email send function and render strings conditionally or from a lookup object.
+### 🔴 Priority 1 — Mobile header language toggle fix
+All portal headers overflow on mobile when the EN/ES toggle is included. Needs a clean mobile solution. Files affected:
+- `app/driver/layout.tsx` — driver header (authenticated + public)
+- `app/components/portal/PortalTopbar.tsx` — partner portal topbar
+- `app/partner/signup/page.tsx` — signup page standalone header
+- Any other page with a standalone header
 
-Key emails to translate:
-- Application received confirmation
-- Account approved notification
-- New booking confirmed (to partner)
-- Booking cancelled (to partner)
-- Commission invoice email
-- Completion notification (to partner)
-- Review reminder (to partner)
+**Options to consider:**
+- On mobile (`sm:hidden` / `md:flex`): hide toggle from header, add it to a hamburger/slide-out menu
+- Icon-only toggle on mobile (just flag emoji, no text)
+- Move toggle into a dropdown alongside logout
+- Sticky bottom bar on mobile with language toggle
 
-### 🔴 Priority 2 — Phase 4: Legal PDF content (EN/ES)
-- `lib/portal/partnerTerms.ts` — Spanish T&Cs for the downloadable PDF. **Requires legal review before publishing.** The page UI is already translated; only the PDF download content needs Spanish.
-- `lib/portal/operatingRules.ts` — same situation. Page UI translated, PDF content still English only.
+### 🟡 Priority 2 — Phase 5: Customer site i18n
+The customer site (`camel-customer`) has zero i18n infrastructure. Full build needed.
 
-### 🟡 Priority 3 — Phase 5: Customer site translation
-All customer-facing pages in `camel-customer`. Start by running the file tree and identifying all `app/` pages. Key pages:
+**Step 1 — Infrastructure** (do first, everything else depends on it):
+- Copy `LanguageContext.tsx`, `useTranslation.ts`, `LanguageToggle.tsx` into `camel-customer/lib/i18n/`
+- Create `camel-customer/lib/i18n/locales/en.json` and `es.json`
+- Wire `LanguageProvider` into `camel-customer/app/ClientRootLayout.tsx`
+- Add `LanguageToggle` to customer site header/nav
+
+**Step 2 — Pages** (priority order):
 - Homepage (`app/page.tsx`)
 - Book (`app/book/page.tsx`)
+- Login / Signup / Reset password
 - Bookings list + detail (`app/bookings/`)
+- Checkout (`app/checkout/[bid_id]/page.tsx`)
 - Account (`app/account/page.tsx`)
-- Login / signup / reset password
-- Checkout (`app/checkout/`)
-- About / contact / privacy / cookies / terms
+- Footer (`app/components/Footer.tsx`)
+- Cookie banner (`app/components/CookieBanner.tsx`)
+- About / Contact / Privacy / Cookies / Terms
 
-### 🟡 Priority 4 — Customer emails + PDFs
-- `lib/email.ts` in `camel-customer` — customer-facing email content
-- `lib/portal/generateBookingReceiptPDF.tsx` — booking receipt (keep EN for NTUK invoicing)
-- `lib/portal/generateCompletionStatementPDF.tsx` — completion statement
+**Step 3 — Customer emails**
+- `lib/email.ts` in `camel-customer` — customer-facing email content EN/ES
+- Customer locale detection: derive from browser/account preference
+
+**Step 4 — PDFs**
+- `generateBookingReceiptPDF.tsx` — likely stays English (NTUK invoicing)
+- `generateCompletionStatementPDF.tsx` — likely stays English (NTUK invoicing)
+
+### 🟡 Priority 3 — Admin emails locale
+Currently admin-triggered partner emails (approval, rejection, account live) always send in English because the admin routes don't look up `communication_locale`. Fix: read `communication_locale` from `partner_profiles` before calling `sendApprovalEmail`, `sendRejectionEmail`, `sendAccountLiveEmail` in:
+- `app/api/admin/applications/update-status/route.ts`
+- `app/api/admin/applications/make-live/route.ts`
 
 ### 🔲 Lower priority (deferred)
 - Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
@@ -460,46 +462,32 @@ A collaborator works on `camel-portal` from Windows (`C:/dev/camel-portal`). He 
 
 ## Session Log
 
+### Chat 41 (Completed)
+**Phase 4 complete + driver improvements + partner communication locale**
+
+1. `lib/email.ts` — partner emails EN/ES (`sendApplicationReceivedEmail`, `sendApprovalEmail`, `sendRejectionEmail`, `sendAccountLiveEmail` all accept `locale` param, default "en")
+2. `lib/portal/partnerTerms.ts` — added `PARTNER_TERMS_ES`, `downloadPartnerTermsPDF(locale)` generates bilingual PDF for ES
+3. `lib/portal/operatingRules.ts` — added `OPERATING_RULES_ES`, `downloadOperatingRulesPDF(companyName, locale)` generates bilingual PDF for ES
+4. `app/partner/signup/page.tsx` — `downloadPartnerTermsPDF` onClick now passes locale
+5. `app/api/partner/complete-signup/route.ts` — derives locale from country at signup, passes to `sendApplicationReceivedEmail`
+6. `app/partner/terms/page.tsx` — renders `PARTNER_TERMS_ES` when locale is "es", passes locale to PDF download
+7. `app/partner/operating-rules/page.tsx` — renders `OPERATING_RULES_ES` when locale is "es", passes locale to PDF download
+8. `app/partner/account/page.tsx` — renders `OPERATING_RULES_ES` when locale is "es", passes locale to PDF download
+9. `app/driver/layout.tsx` — added `LanguageToggle` to both public and authenticated driver headers
+10. SQL migration: `ALTER TABLE partner_profiles ADD COLUMN IF NOT EXISTS communication_locale TEXT NOT NULL DEFAULT 'en' CHECK (communication_locale IN ('en', 'es'))`
+11. `app/partner/settings/page.tsx` — added "Communication Language" section with EN/ES buttons, saves to `partner_profiles.communication_locale`
+12. `lib/portal/completeBooking.tsx` — reads `communication_locale` from partner_profiles, calculates commission, sends partner completion email in correct locale with payout summary, admin email now includes commission breakdown
+13. `app/driver/jobs/page.tsx` — stat cards (Awaiting Delivery, On Hire, Completed) are now clickable filter buttons; clicking filters the job list, clicking again clears
+14. i18n keys added: `settings.language.*` in both en.json and es.json
+15. Stable tags: `v-stable-chat41-complete` on both repos
+
 ### Chat 40 (Completed)
 **i18n Phases 2 & 3 — full partner portal + driver portal translation EN/ES**
-
-Pages translated:
-1. `app/partner/account/page.tsx`
-2. `app/partner/profile/page.tsx`
-3. `app/partner/bookings/page.tsx`
-4. `app/partner/bookings/[id]/page.tsx`
-5. `app/partner/requests/page.tsx`
-6. `app/partner/requests/[id]/page.tsx`
-7. `app/partner/reports/page.tsx`
-8. `app/partner/fleet/page.tsx`
-9. `app/partner/drivers/page.tsx`
-10. `app/partner/reviews/page.tsx`
-11. `app/partner/settings/page.tsx`
-12. `app/partner/suggestions/page.tsx`
-13. `app/partner/terms/page.tsx`
-14. `app/partner/operating-rules/page.tsx`
-15. `app/partner/about/page.tsx`
-16. `app/partner/contact/page.tsx`
-17. `app/partner/privacy/page.tsx`
-18. `app/partner/cookies/page.tsx`
-19. `app/components/Footer.tsx` (portal — PortalFooter + DriverFooter translated; CustomerFooter stays EN for Phase 5)
-20. `app/driver/login/page.tsx`
-21. `app/driver/signup/page.tsx`
-22. `app/driver/reset-password/page.tsx`
-23. `app/driver/jobs/page.tsx`
-24. `lib/i18n/locales/en.json` — all new keys added (account, profile, bookings, requests, reports, fleet, drivers, reviews, settings, suggestions, terms, rules, about, privacy, cookies, contact, footer, driver)
-25. `lib/i18n/locales/es.json` — all Spanish translations added
-26. Stable tag: `v-stable-chat40-i18n-complete`
-
-Note: `lib/email.ts` partner email content, `partnerTerms.ts` PDF content, and `operatingRules.ts` PDF content remain English-only — deferred to Phase 4 (Chat 41).
+Stable tag: `v-stable-chat40-i18n-complete`
 
 ### Chat 39 (Completed)
 **Testing, bug fixes, mobile fixes, security hardening, i18n Phase 1**
-
-1. `lib/portal/partnerTerms.ts` — single source of truth for partner T&Cs
-2–24. Various bug fixes, security hardening, mobile layout fixes
-25–41. i18n infrastructure + Phase 1: homepage, signup, onboarding, dashboard, sidebar, topbar, login, application-submitted, reset-password
-42. Stable tags: `v-stable-chat39-pre-i18n`, `v-stable-chat39-i18n-partner-signup-onboarding`
+Stable tags: `v-stable-chat39-pre-i18n`, `v-stable-chat39-i18n-partner-signup-onboarding`
 
 ### Chat 38 (Completed)
 **Completion email, PDF logo, currency architecture fix**
@@ -542,4 +530,4 @@ git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 
 ---
 
-*Last updated: Chat 40 complete — i18n Phases 1, 2 & 3 done. Entire partner portal and driver portal fully translated EN/ES. Next: Phase 4 — partner email translations in `lib/email.ts`, then legal PDF content in `partnerTerms.ts` and `operatingRules.ts`, then Phase 5 customer site.*
+*Last updated: Chat 41 complete — Phase 4 i18n done (partner emails, bilingual PDFs, partner communication locale). Driver job filter cards added. Mobile header language toggle overflow is a known issue to fix in Chat 42. Next: fix mobile headers, then Phase 5 customer site i18n.*
