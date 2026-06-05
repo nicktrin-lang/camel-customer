@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import HCaptcha from "@/app/components/HCaptcha";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
-const SUBJECTS = [
+const SUBJECTS_EN = [
   "General enquiry",
   "Booking question",
   "Partnership / become a partner",
@@ -12,7 +13,22 @@ const SUBJECTS = [
   "Other",
 ];
 
+const SUBJECTS_ES = [
+  "Consulta general",
+  "Pregunta sobre reserva",
+  "Asociación / hazte socio",
+  "Prensa o medios",
+  "Problema técnico",
+  "Otro",
+];
+
+const inputCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
+const labelCls = "block text-xs font-black uppercase tracking-widest text-black mb-2";
+
 export default function ContactPage() {
+  const { t, locale } = useTranslation();
+  const subjects = locale === "es" ? SUBJECTS_ES : SUBJECTS_EN;
+
   const [name,         setName]         = useState("");
   const [email,        setEmail]        = useState("");
   const [subject,      setSubject]      = useState("");
@@ -58,17 +74,13 @@ export default function ContactPage() {
     }
   }
 
-  const inputCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
-  const labelCls = "block text-xs font-black uppercase tracking-widest text-black mb-2";
-
   return (
     <div className="w-full">
 
-      {/* Hero — left-aligned, same max-w as form below */}
       <section className="w-full bg-black px-6 py-20 text-white">
         <div className="mx-auto max-w-6xl">
           <p className="mb-3 text-sm font-black uppercase tracking-widest text-[#ff7a00]">Get in touch</p>
-          <h1 className="mb-4 text-4xl font-black text-white md:text-6xl">Contact Us</h1>
+          <h1 className="mb-4 text-4xl font-black text-white md:text-6xl">{t("contact.title")}</h1>
           <p className="text-lg font-semibold text-white max-w-xl leading-relaxed">
             Got a question, a partnership enquiry, or a technical issue? Fill in the form below and
             we&apos;ll get back to you.
@@ -76,11 +88,9 @@ export default function ContactPage() {
         </div>
       </section>
 
-      {/* Form + sidebar */}
       <section className="w-full bg-[#f0f0f0] px-6 py-16">
         <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-3">
 
-          {/* Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-black p-6">
               <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-3">Are you a car hire company?</p>
@@ -94,15 +104,13 @@ export default function ContactPage() {
             </div>
           </div>
 
-          {/* Form */}
           <div className="lg:col-span-2" ref={formRef}>
             {success ? (
               <div className="bg-white p-10 text-center">
                 <div className="mb-4 text-5xl">✅</div>
                 <h2 className="mb-2 text-2xl font-black text-black">Message sent</h2>
                 <p className="text-base font-semibold text-black/70 leading-relaxed mb-6">
-                  Thanks for getting in touch. We&apos;ve sent a confirmation to <strong>{email}</strong> and
-                  will get back to you.
+                  {t("contact.sent")} <strong>{email}</strong>
                 </p>
                 <button
                   type="button"
@@ -128,29 +136,17 @@ export default function ContactPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelCls}>
-                      Your name <span className="text-red-500">*</span>
+                      {t("contact.name")} <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      placeholder="Jane Smith"
-                      maxLength={100}
-                      className={inputCls}
-                    />
+                    <input type="text" value={name} onChange={e => setName(e.target.value)}
+                      placeholder="Jane Smith" maxLength={100} className={inputCls} />
                   </div>
                   <div>
                     <label className={labelCls}>
-                      Email address <span className="text-red-500">*</span>
+                      {t("contact.email")} <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder="jane@example.com"
-                      maxLength={200}
-                      className={inputCls}
-                    />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                      placeholder="jane@example.com" maxLength={200} className={inputCls} />
                   </div>
                 </div>
 
@@ -158,44 +154,31 @@ export default function ContactPage() {
                   <label className={labelCls}>
                     Subject <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={subject}
-                    onChange={e => setSubject(e.target.value)}
-                    className={inputCls + " appearance-none cursor-pointer"}
-                  >
+                  <select value={subject} onChange={e => setSubject(e.target.value)}
+                    className={inputCls + " appearance-none cursor-pointer"}>
                     <option value="">Select a subject…</option>
-                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {subjects.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
                 <div>
                   <label className={labelCls}>
-                    Message <span className="text-red-500">*</span>
+                    {t("contact.message")} <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    value={message}
-                    onChange={e => setMessage(e.target.value)}
-                    rows={7}
-                    maxLength={5000}
+                  <textarea value={message} onChange={e => setMessage(e.target.value)}
+                    rows={7} maxLength={5000}
                     placeholder="Tell us how we can help…"
-                    className={inputCls + " resize-none"}
-                  />
+                    className={inputCls + " resize-none"} />
                   <p className="mt-1 text-right text-xs font-semibold text-black/30">{message.length}/5000</p>
                 </div>
 
-                <HCaptcha
-                  key={captchaKey}
+                <HCaptcha key={captchaKey}
                   onVerify={token => setCaptchaToken(token)}
-                  onExpire={() => setCaptchaToken(null)}
-                />
+                  onExpire={() => setCaptchaToken(null)} />
 
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-                >
-                  {loading ? "Sending…" : "Send Message"}
+                <button type="button" onClick={handleSubmit} disabled={loading}
+                  className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-50 transition-opacity">
+                  {loading ? t("common.loading") : t("contact.submit")}
                 </button>
 
                 <p className="text-center text-xs font-semibold text-black/30">

@@ -9,7 +9,6 @@ export default function AboutPage() {
   return (
     <div className="w-full">
 
-      {/* Hero */}
       <section className="w-full bg-black px-6 py-20 text-white">
         <div className="mx-auto max-w-4xl">
           <p className="mb-3 text-sm font-black uppercase tracking-widest text-[#ff7a00]">About Camel Global</p>
@@ -24,7 +23,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* What we do */}
       <section className="w-full bg-white px-6 py-16">
         <div className="mx-auto max-w-4xl">
           <h2 className="mb-6 text-3xl font-black text-black">What we do</h2>
@@ -45,7 +43,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* How it works */}
       <section className="w-full bg-[#f0f0f0] px-6 py-16">
         <div className="mx-auto max-w-4xl">
           <h2 className="mb-10 text-3xl font-black text-black">How it works</h2>
@@ -68,7 +65,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* Why Camel Global */}
       <section className="w-full bg-white px-6 py-16">
         <div className="mx-auto max-w-4xl">
           <h2 className="mb-6 text-3xl font-black text-black">Why Camel Global</h2>
@@ -88,7 +84,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* For partners */}
       <section className="w-full bg-black px-6 py-16 text-white">
         <div className="mx-auto max-w-4xl">
           <h2 className="mb-4 text-3xl font-black text-white">Are you a car hire company?</h2>
@@ -96,26 +91,21 @@ export default function AboutPage() {
             Join the Camel Global partner network. You set your own prices, manage your own fleet.
             No monthly fees. No lock-in.
           </p>
-          <a
-            href="/partner/signup"
-            className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 transition-opacity"
-          >
+          <a href="/partner/signup"
+            className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 transition-opacity">
             Apply to become a partner →
           </a>
         </div>
       </section>
 
-      {/* Contact */}
       <section className="w-full bg-[#f0f0f0] px-6 py-16">
         <div className="mx-auto max-w-4xl">
           <h2 className="mb-4 text-3xl font-black text-black">Got a question? Get in touch.</h2>
           <p className="mb-6 text-base font-semibold text-black leading-relaxed">
             Got a question or a partnership enquiry? We&apos;d love to hear from you.
           </p>
-          <a
-            href="/contact"
-            className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 transition-opacity"
-          >
+          <a href="/contact"
+            className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 transition-opacity">
             Contact us →
           </a>
         </div>
