@@ -4,19 +4,21 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerAuthSupabaseClient } from "@/lib/supabase/auth-client";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 function ResetPasswordInner() {
   const authClient = useMemo(() => createCustomerAuthSupabaseClient(), []);
   const supabase   = useMemo(() => createCustomerBrowserClient(), []);
   const router     = useRouter();
+  const { t }      = useTranslation();
 
-  const [password,      setPassword]      = useState("");
-  const [confirm,       setConfirm]       = useState("");
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState("");
-  const [success,       setSuccess]       = useState(false);
-  const [sessionReady,  setSessionReady]  = useState(false);
-  const [sessionError,  setSessionError]  = useState("");
+  const [password,     setPassword]     = useState("");
+  const [confirm,      setConfirm]      = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState("");
+  const [success,      setSuccess]      = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState("");
 
   useEffect(() => {
     async function init() {
@@ -65,23 +67,25 @@ function ResetPasswordInner() {
             <>
               <h1 className="text-3xl font-black text-[#003768]">Link Expired</h1>
               <p className="mt-2 text-slate-600">{sessionError}</p>
-              <a href="/login" className="mt-6 inline-block rounded-full bg-[#ff7a00] px-6 py-3 font-bold text-white shadow-[0_8px_18px_rgba(255,122,0,0.3)] hover:opacity-95">Back to login</a>
+              <a href="/login" className="mt-6 inline-block rounded-full bg-[#ff7a00] px-6 py-3 font-bold text-white shadow-[0_8px_18px_rgba(255,122,0,0.3)] hover:opacity-95">
+                ← {t("common.back")}
+              </a>
             </>
           ) : success ? (
             <>
-              <h1 className="text-3xl font-black text-[#003768]">Password Updated ✓</h1>
-              <p className="mt-2 text-slate-600">Your password has been changed. Redirecting you to login…</p>
+              <h1 className="text-3xl font-black text-[#003768]">{t("reset.success")} ✓</h1>
+              <p className="mt-2 text-slate-600">Redirecting you to login…</p>
             </>
           ) : !sessionReady ? (
-            <p className="text-slate-600">Verifying reset link…</p>
+            <p className="text-slate-600">{t("common.loading")}</p>
           ) : (
             <>
-              <h1 className="text-3xl font-black text-[#003768]">Set New Password</h1>
+              <h1 className="text-3xl font-black text-[#003768]">{t("reset.title")}</h1>
               <p className="mt-1 text-slate-500">Choose a new password for your account.</p>
               {error && <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
               <form onSubmit={handleSubmit} className="mt-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-semibold text-[#003768] mb-1.5">New password</label>
+                  <label className="block text-sm font-semibold text-[#003768] mb-1.5">{t("reset.newPassword")}</label>
                   <input type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="Min. 8 characters"
                     className="w-full rounded-xl border border-black/10 px-4 py-3 outline-none focus:border-[#003768]" />
@@ -94,7 +98,7 @@ function ResetPasswordInner() {
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full rounded-xl bg-[#ff7a00] py-3 font-bold text-white shadow-[0_8px_18px_rgba(255,122,0,0.3)] hover:opacity-95 disabled:opacity-60">
-                  {loading ? "Updating…" : "Set new password"}
+                  {loading ? t("common.loading") : t("reset.updatePassword")}
                 </button>
               </form>
             </>

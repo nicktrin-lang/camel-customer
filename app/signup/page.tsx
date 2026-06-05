@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import HCaptcha from "@/app/components/HCaptcha";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 
 const inputCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
 const labelCls = "block text-xs font-black uppercase tracking-widest text-black mb-2";
@@ -15,6 +16,7 @@ function SignupForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const nextPath     = searchParams.get("next") || "/bookings";
+  const { t }        = useTranslation();
 
   const [fullName,     setFullName]     = useState("");
   const [phone,        setPhone]        = useState("");
@@ -58,8 +60,6 @@ function SignupForm() {
         throw new Error(j?.error || "Failed to create profile.");
       }
 
-      // If there's a booking draft and we're coming from /book, submit it now
-      // while we have the session — don't rely on /book picking it up
       if (nextPath === "/book") {
         let draft: Record<string, any> | null = null;
         try {
@@ -75,7 +75,6 @@ function SignupForm() {
           const duration = diffMs > 0 ? Math.ceil(diffMs / (24 * 60 * 60 * 1000)) * 24 * 60 : null;
 
           if (duration) {
-            // Get the session that was just created
             const { data: { session: newSession } } = await supabase.auth.getSession();
             const token = newSession?.access_token;
             console.log("[CAMEL DEBUG] draft found, duration:", duration, "token present:", !!token, "session:", newSession);
@@ -120,18 +119,16 @@ function SignupForm() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
 
-      {/* Hero / top black band */}
       <div className="w-full bg-black px-6 py-16 text-white">
         <div className="mx-auto max-w-lg">
-          <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">My Account</p>
-          <h1 className="text-4xl font-black text-white md:text-5xl">Create your account.</h1>
+          <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">{t("common.account")}</p>
+          <h1 className="text-4xl font-black text-white md:text-5xl">{t("signup.title")}.</h1>
           <p className="mt-3 text-base font-semibold text-white/70">
             Start booking meet &amp; greet car hire in minutes.
           </p>
         </div>
       </div>
 
-      {/* Form */}
       <div className="w-full bg-[#f0f0f0] px-6 py-12">
         <div className="mx-auto max-w-lg">
           <div className="bg-white p-8 space-y-5">
@@ -144,7 +141,7 @@ function SignupForm() {
 
             <form onSubmit={onSubmit} className="space-y-4">
               <div>
-                <label className={labelCls}>Full name</label>
+                <label className={labelCls}>{t("signup.name")}</label>
                 <input value={fullName} onChange={e => setFullName(e.target.value)} required
                   className={inputCls} placeholder="Your full name" />
               </div>
@@ -156,29 +153,29 @@ function SignupForm() {
                   className={inputCls} placeholder="+44 7700 000000" />
               </div>
               <div>
-                <label className={labelCls}>Email address</label>
+                <label className={labelCls}>{t("signup.email")}</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
                   className={inputCls} placeholder="your@email.com" />
               </div>
               <div>
-                <label className={labelCls}>Password</label>
+                <label className={labelCls}>{t("signup.password")}</label>
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
                   className={inputCls} placeholder="Min. 8 characters" />
               </div>
               <HCaptcha key={captchaKey} onVerify={handleCaptcha} onExpire={() => setCaptchaToken("")} />
               <button type="submit" disabled={loading}
                 className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
-                {loading ? "Creating account…" : "Create Account →"}
+                {loading ? t("common.loading") : t("signup.submit") + " →"}
               </button>
             </form>
 
             <p className="text-center text-sm font-semibold text-black">
-              Already have an account?{" "}
+              {t("signup.haveAccount")}{" "}
               <Link
                 href={nextPath !== "/bookings" ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
                 className="font-black text-[#ff7a00] hover:underline"
               >
-                Sign in
+                {t("signup.signIn")}
               </Link>
             </p>
 
