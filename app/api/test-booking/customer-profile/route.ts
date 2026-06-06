@@ -1,21 +1,58 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
+import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
+
+function getBearerToken(req: Request) {
+  const auth = req.headers.get("authorization") || "";
+  if (!auth.toLowerCase().startsWith("bearer ")) return null;
+  return auth.slice(7).trim() || null;
+}
+
+export async function GET(req: Request) {
+  try {
+    const token = getBearerToken(req);
+    if (!token) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+    const customerDb = createCustomerServiceRoleSupabaseClient();
+    const { data: { user }, error: authErr } = await customerDb.auth.getUser(token);
+    if (authErr || !user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+    const db = createServiceRoleSupabaseClient();
+    const { data, error } = await db
+      .from("customer_profiles")
+      .select("full_name, phone, communication_locale")
+      .eq("user_id", user.id)
+      .single();
+
+    if (error && error.code !== "PGRST116") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json(data || {});
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const { user_id, full_name, phone } = await req.json();
+    const body = await req.json();
+    const { user_id, full_name, phone, communication_locale } = body;
 
     if (!user_id) {
       return NextResponse.json({ error: "user_id is required" }, { status: 400 });
     }
 
-    // Use service role to bypass RLS — session may not be established
-    // immediately after signUp when email confirmation is enabled
     const db = createServiceRoleSupabaseClient();
 
-    const { error } = await db
-      .from("customer_profiles")
-      .upsert({ user_id, full_name: full_name || null, phone: phone || null });
+    const upsertData: Record<string, unknown> = {
+      user_id,
+      full_name: full_name ?? null,
+      phone: phone ?? null,
+    };
+    if (communication_locale) upsertData.communication_locale = communication_locale;
+
+    const { error } = await db.from("customer_profiles").upsert(upsertData);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
 import CurrencySelector from "@/app/components/CurrencySelector";
 import CookieBanner from "@/app/components/CookieBanner";
@@ -12,7 +12,6 @@ import ChatWidget from "@/app/components/ChatWidget";
 import { LanguageProvider, useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
-// Compact toggle — same pattern as portal/driver
 function CompactLanguageToggle() {
   const { locale, setLocale } = useLanguage();
   const options: { code: Locale; label: string }[] = [
@@ -41,37 +40,44 @@ function CompactLanguageToggle() {
   );
 }
 
-function InnerLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function InnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const { locale, setLocale } = useLanguage();
 
-  const isHomepage = pathname === "/";
-  const isNewCustomerArea =
-    pathname?.startsWith("/bookings") ||
-    pathname?.startsWith("/book") ||
-    pathname === "/login" ||
-    pathname === "/signup" ||
-    pathname === "/account" ||
-    pathname === "/reset-password";
-  const isCheckoutPage = pathname?.startsWith("/checkout");
+  const isHomepage        = pathname === "/";
+  const isCheckoutPage    = pathname?.startsWith("/checkout");
+  const isComingSoonPage  = pathname === "/coming-soon";
   const isTestBookingArea = pathname?.startsWith("/test-booking");
+  const isNewCustomerArea =
+    pathname?.startsWith("/bookings") || pathname?.startsWith("/book") ||
+    pathname === "/login" || pathname === "/signup" ||
+    pathname === "/account" || pathname === "/reset-password";
   const isCustomerPublicPage =
-    pathname === "/about" ||
-    pathname === "/contact" ||
-    pathname === "/privacy" ||
-    pathname === "/cookies" ||
-    pathname === "/terms";
+    pathname === "/about" || pathname === "/contact" || pathname === "/privacy" ||
+    pathname === "/cookies" || pathname === "/terms";
 
-  const showCurrencyInHeader = false;
-  const isComingSoonPage = pathname === "/coming-soon";
   const showGlobalHeader = !isHomepage && !isComingSoonPage;
 
   const [isCustomerLoggedIn, setIsCustomerLoggedIn] = useState(false);
-  const [customerName, setCustomerName] = useState("");
+  const [customerName,       setCustomerName]       = useState("");
+  const [burgerOpen,         setBurgerOpen]         = useState(false);
+  const burgerRef = useRef<HTMLDivElement>(null);
+
+  // Close burger on outside click
+  useEffect(() => {
+    if (!burgerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (burgerRef.current && !burgerRef.current.contains(e.target as Node)) {
+        setBurgerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [burgerOpen]);
+
+  // Close burger on route change
+  useEffect(() => { setBurgerOpen(false); }, [pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -145,29 +151,84 @@ function InnerLayout({
         <>
           <header className="fixed left-0 top-0 z-50 w-full bg-black">
             <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
-              <Link href="/" className="flex items-center">
+              {/* Logo */}
+              <Link href="/" className="flex items-center shrink-0">
                 <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
               </Link>
-              <nav className="flex items-center gap-3">
-                {showCurrencyInHeader && (
-                  <div className="hidden sm:block"><CurrencySelector /></div>
-                )}
+
+              {/* Desktop nav */}
+              <nav className="hidden md:flex items-center gap-3">
                 <CompactLanguageToggle />
                 {isCustomerLoggedIn ? (
                   <>
                     <Link href={newBookingHref} className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
-                    <Link href={bookingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">{t("common.myBookings")}</Link>
-                    <Link href={settingsHref}   className="hidden text-sm font-bold text-white hover:underline md:block">{t("common.account")}</Link>
-                    {customerName && <span className="hidden text-sm font-bold text-white lg:block">{t("common.hi", { name: customerName })}</span>}
+                    <Link href={bookingsHref}   className="text-sm font-bold text-white hover:underline">{t("common.myBookings")}</Link>
+                    <Link href={settingsHref}   className="text-sm font-bold text-white hover:underline">{t("common.account")}</Link>
+                    {customerName && <span className="hidden lg:block text-sm font-bold text-white">{t("common.hi", { name: customerName })}</span>}
                     <button type="button" onClick={handleCustomerLogout} className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logout")}</button>
                   </>
                 ) : (
                   <>
-                    <Link href={signupHref} className="hidden text-sm font-bold text-white hover:underline sm:block">{t("nav.signUp")}</Link>
+                    <Link href={signupHref} className="text-sm font-bold text-white hover:underline">{t("nav.signUp")}</Link>
                     <Link href={loginHref}  className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("nav.logIn")}</Link>
                   </>
                 )}
               </nav>
+
+              {/* Mobile nav — New Booking always visible + burger */}
+              <div className="flex md:hidden items-center gap-2" ref={burgerRef}>
+                <Link href={newBookingHref} className="bg-[#ff7a00] px-3 py-2 text-xs font-black text-white hover:opacity-90 transition-opacity">
+                  {t("common.newBooking")}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setBurgerOpen(o => !o)}
+                  aria-label={t("nav.burger.menu")}
+                  className="flex flex-col justify-center items-center w-10 h-10 gap-1.5 border border-white/20 hover:bg-white/10 transition-colors"
+                >
+                  <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "rotate-45 translate-y-2" : ""}`} />
+                  <span className={`block h-0.5 w-5 bg-white transition-opacity ${burgerOpen ? "opacity-0" : ""}`} />
+                  <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+                </button>
+
+                {/* Dropdown */}
+                {burgerOpen && (
+                  <div className="absolute top-[76px] left-0 right-0 bg-black border-t border-white/10 z-50 py-3 space-y-0">
+                    {/* Language toggle row */}
+                    <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+                      <span className="text-xs font-black uppercase tracking-widest text-white/40 mr-2">{t("nav.burger.menu")}</span>
+                      <CompactLanguageToggle />
+                    </div>
+                    {isCustomerLoggedIn ? (
+                      <>
+                        {customerName && (
+                          <div className="px-4 py-3 border-b border-white/10">
+                            <p className="text-sm font-bold text-white/50">{t("common.hi", { name: customerName })}</p>
+                          </div>
+                        )}
+                        <Link href={bookingsHref} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                          {t("common.myBookings")}
+                        </Link>
+                        <Link href={settingsHref} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                          {t("common.account")}
+                        </Link>
+                        <button type="button" onClick={handleCustomerLogout} className="block w-full text-left px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+                          {t("common.logout")}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Link href={signupHref} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                          {t("nav.signUp")}
+                        </Link>
+                        <Link href={loginHref} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+                          {t("nav.logIn")}
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </header>
           <div className="h-[76px]" />

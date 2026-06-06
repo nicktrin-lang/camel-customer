@@ -4,7 +4,7 @@ function isValidEmail(email: string) {
 
 type EmailAttachment = {
   filename: string;
-  content: string;   // base64-encoded
+  content: string;
   encoding: "base64";
 };
 
@@ -67,151 +67,164 @@ export async function sendEmail({
   return json;
 }
 
-export async function sendApplicationReceivedEmail(to: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
+// ---------------------------------------------------------------------------
+// Shared brand email wrapper — mirrors portal pattern exactly
+// ---------------------------------------------------------------------------
+function brandEmail(
+  headingEN: string,
+  headingES: string | null,
+  bodyEN: string,
+  bodyES: string | null,
+  locale: "en" | "es"
+): string {
+  if (locale === "es" && headingES && bodyES) {
+    return `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
+        <div style="background:#000; padding:24px 32px;">
+          <h2 style="color:#fff; margin:0;">${headingES}</h2>
+        </div>
+        <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
+          ${bodyES}
+          <p style="margin-top:32px; color:#888; font-size:14px;">Saludos,<br/><strong style="color:#222;">El equipo de Camel Global</strong></p>
+        </div>
+      </div>`;
+  }
+  return `
+    <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
+      <div style="background:#000; padding:24px 32px;">
+        <h2 style="color:#fff; margin:0;">${headingEN}</h2>
+      </div>
+      <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
+        ${bodyEN}
+        <p style="margin-top:32px; color:#888; font-size:14px;">Best regards,<br/><strong style="color:#222;">The Camel Global Team</strong></p>
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Customer emails — all accept optional locale (default "en")
+// PDFs (receipt, completion statement) stay English — NTUK is a UK company
+// ---------------------------------------------------------------------------
+
+export async function sendCustomerBidReceivedEmail(
+  to: string,
+  jobNumber?: number | null,
+  locale: "en" | "es" = "en"
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
+
+  const subjectEN = `A new partner bid has been received${jobNumber ? ` for booking #${jobNumber}` : ""}`;
+  const subjectES = `Nueva oferta recibida${jobNumber ? ` para la reserva #${jobNumber}` : ""}`;
+
+  const bodyEN = `
+    <p>A partner has submitted a bid for your booking request${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""}.</p>
+    <p>You can now log in and review the bid details.</p>
+    <p style="margin:24px 0;">
+      <a href="${baseUrl}/bookings"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        View your bookings
+      </a>
+    </p>`;
+
+  const bodyES = `
+    <p>Un socio ha enviado una oferta para tu solicitud de reserva${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""}.</p>
+    <p>Ya puedes iniciar sesión y revisar los detalles de la oferta.</p>
+    <p style="margin:24px 0;">
+      <a href="${baseUrl}/bookings"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        Ver tus reservas
+      </a>
+    </p>`;
+
   return sendEmail({
     to,
-    subject: "Your Camel Global partner application has been received",
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>Application received</h2>
-        <p>Thanks for applying to become a Camel Global partner.</p>
-        <p>We have received your application and our team will review it shortly.</p>
-        <p>No action is required at this stage.</p>
-        <p><a href="${baseUrl}/partner/login">Partner login</a></p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
+    subject: locale === "es" ? subjectES : subjectEN,
+    html: brandEmail("New bid received", "Nueva oferta recibida", bodyEN, bodyES, locale),
   });
 }
 
-export async function sendApprovalEmail(to: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
-  return sendEmail({
-    to,
-    subject: "Your Camel Global account has been approved ✅",
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>You're approved ✅</h2>
-        <p>Your partner account has been approved.</p>
-        <p><strong>You are not live yet.</strong></p>
-        <p>Please log in and complete the following before going live:</p>
-        <ul>
-          <li>Add your fleet</li>
-          <li>Confirm your fleet base address</li>
-          <li>Check your service radius</li>
-        </ul>
-        <p><a href="${baseUrl}/partner/login">Log in here</a></p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
-  });
-}
+export async function sendCustomerBookingCompletedEmail(
+  to: string,
+  jobNumber?: number | null,
+  locale: "en" | "es" = "en"
+) {
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
 
-export async function sendRejectionEmail(to: string) {
-  return sendEmail({
-    to,
-    subject: "Your Camel Global partner application was not approved",
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>Application update</h2>
-        <p>Thank you for your interest in becoming a Camel Global partner.</p>
-        <p>After review, we are unable to approve your application at this time.</p>
-        <p>If you believe this was a mistake or would like to discuss your application, please contact our team.</p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
-  });
-}
+  const subjectEN = `Your booking is now completed${jobNumber ? ` — #${jobNumber}` : ""}`;
+  const subjectES = `Tu reserva ha sido completada${jobNumber ? ` — #${jobNumber}` : ""}`;
 
-export async function sendAccountLiveEmail(to: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
-  return sendEmail({
-    to,
-    subject: "Your Camel Global account is now live 🚀",
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>Your account is now live 🚀</h2>
-        <p>Your partner account is now live and ready to receive bookings.</p>
-        <p>Please make sure:</p>
-        <ul>
-          <li>Your fleet is up to date</li>
-          <li>Your service radius is correct</li>
-          <li>Your contact details are current</li>
-        </ul>
-        <p><a href="${baseUrl}/partner/dashboard">Go to dashboard</a></p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
-  });
-}
+  const bodyEN = `
+    <p>Your booking${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} has now been marked as completed.</p>
+    <p>The vehicle return has been confirmed. Your fuel deposit refund (if applicable) will be processed automatically within 5–10 working days.</p>
+    <p style="margin:24px 0;">
+      <a href="${baseUrl}/bookings"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        View booking details
+      </a>
+    </p>`;
 
-export async function sendCustomerBidReceivedEmail(to: string, jobNumber?: number | null) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
-  return sendEmail({
-    to,
-    subject: `A new partner bid has been received${jobNumber ? ` for booking ${jobNumber}` : ""}`,
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>New partner bid received</h2>
-        <p>A partner has submitted a bid for your booking request${jobNumber ? ` <strong>${jobNumber}</strong>` : ""}.</p>
-        <p>You can now log in and review the bid details.</p>
-        <p><a href="${baseUrl}/bookings">View your requests</a></p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
-  });
-}
+  const bodyES = `
+    <p>Tu reserva${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} ha sido marcada como completada.</p>
+    <p>Se ha confirmado la devolución del vehículo. El reembolso del depósito de combustible (si procede) se procesará automáticamente en 5–10 días laborables.</p>
+    <p style="margin:24px 0;">
+      <a href="${baseUrl}/bookings"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        Ver detalles de la reserva
+      </a>
+    </p>`;
 
-export async function sendCustomerBookingCompletedEmail(to: string, jobNumber?: number | null) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
   return sendEmail({
     to,
-    subject: `Your Camel Global booking is now completed${jobNumber ? ` - ${jobNumber}` : ""}`,
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6;">
-        <h2>Booking completed</h2>
-        <p>Your booking${jobNumber ? ` <strong>${jobNumber}</strong>` : ""} has now been marked as completed.</p>
-        <p>The vehicle return has been confirmed.</p>
-        <p><a href="${baseUrl}/bookings">View booking details</a></p>
-        <p style="margin-top:24px;">Best Regards,<br />The Camel Global Team</p>
-      </div>
-    `,
+    subject: locale === "es" ? subjectES : subjectEN,
+    html: brandEmail("Booking completed", "Reserva completada", bodyEN, bodyES, locale),
   });
 }
 
 export async function sendReviewReminderEmail(
   to: string,
   jobNumber?: number | null,
-  requestId?: string | null
+  requestId?: string | null,
+  locale: "en" | "es" = "en"
 ) {
-  const baseUrl   = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
-  const reviewUrl = requestId
-    ? `${baseUrl}/bookings/${requestId}`
-    : `${baseUrl}/bookings`;
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
+  const reviewUrl = requestId ? `${baseUrl}/bookings/${requestId}` : `${baseUrl}/bookings`;
+
+  const subjectEN = `How was your car hire experience?${jobNumber ? ` (Booking #${jobNumber})` : ""}`;
+  const subjectES = `¿Qué tal fue tu experiencia de alquiler?${jobNumber ? ` (Reserva #${jobNumber})` : ""}`;
+
+  const bodyEN = `
+    <p>Hi,</p>
+    <p>Your Camel Global car hire booking${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} is now complete. We'd love to hear how it went.</p>
+    <p>Your review helps other customers choose the right car hire company for their trip.</p>
+    <p style="margin:24px 0;">
+      <a href="${reviewUrl}"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        Leave a Review
+      </a>
+    </p>
+    <p style="color:#64748b; font-size:14px;">It only takes 30 seconds.</p>`;
+
+  const bodyES = `
+    <p>Hola,</p>
+    <p>Tu reserva de alquiler de coches con Camel Global${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} ha finalizado. Nos encantaría saber cómo fue.</p>
+    <p>Tu reseña ayuda a otros clientes a elegir la empresa de alquiler adecuada para su viaje.</p>
+    <p style="margin:24px 0;">
+      <a href="${reviewUrl}"
+        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
+        Dejar una reseña
+      </a>
+    </p>
+    <p style="color:#64748b; font-size:14px;">Solo lleva 30 segundos.</p>`;
 
   return sendEmail({
     to,
-    subject: `How was your car hire experience?${jobNumber ? ` (Booking ${jobNumber})` : ""}`,
-    html: `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
-        <div style="background:#000000; padding:24px 32px;">
-          <h2 style="color:#fff; margin:0;">How was your car hire experience? ⭐</h2>
-        </div>
-        <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
-          <p>Hi,</p>
-          <p>Your Camel Global car hire booking${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} is now complete. We'd love to hear how it went.</p>
-          <p>Your review helps other customers choose the right car hire company for their trip.</p>
-          <p style="margin:24px 0;">
-            <a href="${reviewUrl}"
-              style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-              Leave a Review
-            </a>
-          </p>
-          <p style="color:#64748b; font-size:14px;">It only takes 30 seconds.</p>
-          <p style="margin-top:32px; color:#64748b;">Best regards,<br/><strong>The Camel Global Team</strong></p>
-        </div>
-      </div>
-    `,
+    subject: locale === "es" ? subjectES : subjectEN,
+    html: brandEmail(
+      "How was your car hire experience? ⭐",
+      "¿Qué tal fue tu experiencia de alquiler? ⭐",
+      bodyEN,
+      bodyES,
+      locale
+    ),
   });
 }
