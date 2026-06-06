@@ -81,7 +81,7 @@ function CheckoutForm({ intent, requestId, onError }: {
             <span className="font-black text-black">{fmtCurr(intent.amount_car_hire, curr)}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="font-bold text-black/60">{t("checkout.fuelDepositLabel")} <span className="text-black/40">(refundable)</span></span>
+            <span className="font-bold text-black/60">{t("checkout.fuelDepositLabel")} <span className="text-black/40">{t("checkout.fuelDepositRefundable")}</span></span>
             <span className="font-black text-black">{fmtCurr(intent.amount_fuel, curr)}</span>
           </div>
           <div className="flex justify-between text-sm font-black border-t border-black/10 pt-2">
@@ -90,13 +90,13 @@ function CheckoutForm({ intent, requestId, onError }: {
           </div>
         </div>
         <div className="border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black/50">
-          💧 The fuel deposit will be refunded automatically when your booking completes, minus any fuel used.
+          {t("checkout.fuelRefundNote")}
         </div>
       </div>
 
       {/* Stripe payment form */}
       <div>
-        <p className="text-xs font-black uppercase tracking-widest text-black mb-3">Payment Details</p>
+        <p className="text-xs font-black uppercase tracking-widest text-black mb-3">{t("checkout.paymentDetails")}</p>
         <PaymentElement
           options={{ layout: "tabs" }}
           onReady={() => setReady(true)}
@@ -126,7 +126,7 @@ function CheckoutForm({ intent, requestId, onError }: {
       </button>
 
       <p className="text-xs font-bold text-black/40 text-center">
-        🔒 Payments are processed securely by Stripe. Camel Global never stores your card details.
+        {t("checkout.stripeNote")}
       </p>
     </div>
   );
@@ -181,7 +181,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
       <div className="flex-1 flex items-center justify-center bg-[#f0f0f0]">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 rounded-full border-4 border-[#ff7a00] border-t-transparent animate-spin mx-auto" />
-          <p className="text-sm font-black text-black">Setting up secure payment…</p>
+          <p className="text-sm font-black text-black">{t("checkout.settingUp")}</p>
         </div>
       </div>
     </div>
@@ -194,7 +194,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
       </nav>
       <div className="flex-1 flex items-center justify-center bg-[#f0f0f0] px-6">
         <div className="max-w-md w-full bg-white p-8 space-y-4">
-          <p className="text-lg font-black text-red-700">Payment unavailable</p>
+          <p className="text-lg font-black text-red-700">{t("checkout.unavailable")}</p>
           <p className="text-sm font-bold text-black/60">{error}</p>
           <button onClick={() => router.back()}
             className="w-full border border-black/20 py-3 text-sm font-black text-black hover:bg-black/5">
@@ -216,7 +216,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
 
       <div className="w-full bg-black px-6 py-12 text-white">
         <div className="mx-auto max-w-2xl">
-          <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-2">Secure Checkout</p>
+          <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00] mb-2">{t("checkout.secureCheckout")}</p>
           <h1 className="text-3xl font-black">{t("checkout.title")}</h1>
         </div>
       </div>

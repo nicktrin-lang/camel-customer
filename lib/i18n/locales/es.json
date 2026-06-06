@@ -332,6 +332,13 @@
   "booking.cancelled.by.you": "Tú",
 
   "checkout.title": "Confirmar tu reserva",
+  "checkout.secureCheckout": "Pago seguro",
+  "checkout.fuelRefundNote": "💧 El depósito de combustible se reembolsará automáticamente al completar tu reserva, menos el combustible usado.",
+  "checkout.paymentDetails": "Detalles del pago",
+  "checkout.stripeNote": "🔒 Los pagos se procesan de forma segura mediante Stripe. Camel Global nunca almacena los datos de tu tarjeta.",
+  "checkout.settingUp": "Configurando el pago seguro…",
+  "checkout.unavailable": "Pago no disponible",
+  "checkout.fuelDepositRefundable": "(reembolsable)",
   "checkout.summary": "Resumen de la reserva",
   "checkout.payNow": "Pagar ahora",
   "checkout.total": "Total",

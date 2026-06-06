@@ -332,6 +332,13 @@
   "booking.cancelled.by.you": "You",
 
   "checkout.title": "Confirm Your Booking",
+  "checkout.secureCheckout": "Secure Checkout",
+  "checkout.fuelRefundNote": "💧 The fuel deposit will be refunded automatically when your booking completes, minus any fuel used.",
+  "checkout.paymentDetails": "Payment Details",
+  "checkout.stripeNote": "🔒 Payments are processed securely by Stripe. Camel Global never stores your card details.",
+  "checkout.settingUp": "Setting up secure payment…",
+  "checkout.unavailable": "Payment unavailable",
+  "checkout.fuelDepositRefundable": "(refundable)",
   "checkout.summary": "Booking Summary",
   "checkout.payNow": "Pay Now",
   "checkout.total": "Total",
