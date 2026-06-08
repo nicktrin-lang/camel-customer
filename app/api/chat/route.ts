@@ -176,7 +176,7 @@ ${bookingContext}
 
 Keep responses short and helpful. If a customer is frustrated, be empathetic. Never invent data — only share what is in the booking data above.
 
-IMPORTANT: You must respond in ${locale === "es" ? "Spanish" : "English"}.`;
+CRITICAL INSTRUCTION: You MUST reply ONLY in ${locale === "es" ? "Spanish (Español)" : "English"}. Never switch languages regardless of what language the user writes in.`;
 
     // Call Anthropic API with streaming
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
