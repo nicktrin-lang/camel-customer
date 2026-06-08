@@ -68,6 +68,9 @@ type BookingData = {
 type ResponseShape = { request: RequestData; bids: BidRow[]; booking: BookingData|null };
 type ConfirmSection = "collection"|"return";
 
+// t() type — minimal signature matching useTranslation hook output
+type TFn = (key: string, vars?: Record<string, string>) => string;
+
 const HOURS_48 = 48*60*60*1000;
 const PRE_COLLECTION = ["confirmed","driver_assigned","en_route","arrived"];
 
@@ -78,15 +81,32 @@ function normalizeFuel(v: unknown): string|null {
   if (s==="half") return "half"; if (s==="three_quarter"||s==="3/4") return "3/4";
   if (s==="full") return "full"; return null;
 }
-function fuelLabel(v: unknown): string {
+
+// Translate fuel level value using i18n keys
+function fuelLabel(v: unknown, t: TFn): string {
   switch(normalizeFuel(v)) {
-    case "empty": return "Empty"; case "quarter": return "¼ Tank";
-    case "half": return "½ Tank"; case "3/4": return "¾ Tank";
-    case "full": return "Full Tank"; default: return "—";
+    case "empty":   return t("home.fuel.empty");
+    case "quarter": return t("home.fuel.quarter");
+    case "half":    return t("home.fuel.half");
+    case "3/4":     return t("home.fuel.three");
+    case "full":    return t("home.fuel.full");
+    default:        return "—";
   }
 }
+
+// Translate quarter count (0–4) to fuel label
+function quarterLabel(n: number, t: TFn): string {
+  switch(n) {
+    case 0: return t("home.fuel.empty");
+    case 1: return t("home.fuel.quarter");
+    case 2: return t("home.fuel.half");
+    case 3: return t("home.fuel.three");
+    case 4: return t("home.fuel.full");
+    default: return `${n}/4`;
+  }
+}
+
 const FUEL_BARS_MAP: Record<string,number> = { empty:0, quarter:1, half:2, "3/4":3, full:4 };
-const QUARTER_LABELS: Record<number,string> = { 0:"Empty", 1:"¼ Tank", 2:"½ Tank", 3:"¾ Tank", 4:"Full Tank" };
 
 function FuelBar({ level, light }: { level: string|null; light?: boolean }) {
   const n = normalizeFuel(level); const filled = n?(FUEL_BARS_MAP[n]??0):0;
@@ -249,10 +269,10 @@ function BookingSummaryCard({ bk, accessToken }: { bk: BookingData; accessToken:
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 mb-4">
           {[
-            {label:t("booking.summary.deliveryFuel"),value:fuelLabel(collFuel),bar:collFuel},
-            {label:t("booking.summary.collectionFuel"),value:fuelLabel(retFuel),bar:retFuel},
-            {label:t("booking.summary.fuelUsed"),value:usedQ!==null?QUARTER_LABELS[usedQ]??`${usedQ}/4`:"—",bar:null},
-            {label:t("booking.summary.perQuarter"),value:fmt2(perQtrAmt),bar:null}
+            {label:t("booking.summary.deliveryFuel"),  value:fuelLabel(collFuel, t), bar:collFuel},
+            {label:t("booking.summary.collectionFuel"),value:fuelLabel(retFuel, t),  bar:retFuel},
+            {label:t("booking.summary.fuelUsed"),      value:usedQ!==null?quarterLabel(usedQ, t):"—", bar:null},
+            {label:t("booking.summary.perQuarter"),    value:fmt2(perQtrAmt), bar:null}
           ].map(({label,value,bar})=>(
             <div key={label} className="bg-white/10 p-3"><p className="text-xs font-black text-white/50 uppercase tracking-wide mb-1">{label}</p><p className="font-black text-white">{value}</p>{bar&&<FuelBar level={bar} light/>}</div>
           ))}
@@ -365,11 +385,11 @@ function FuelConfirmCard({ title,effectiveFuel,effectiveReady,effectiveReadyAt,c
           {partnerOverrideActive ? t("booking.fuel.officeRecorded") : t("booking.fuel.driverRecorded")}
         </p>
         {effectiveReady&&effectiveFuel
-          ? <><p className="text-2xl font-black text-white">{fuelLabel(effectiveFuel)}</p><FuelBar level={effectiveFuel} light/>{partnerOverrideActive&&<p className="text-xs text-[#ff7a00] mt-1 font-black">{t("booking.fuel.officeOverride")}</p>}<p className="text-xs text-white/70 mt-1">{fmt(effectiveReadyAt)}</p></>
+          ? <><p className="text-2xl font-black text-white">{fuelLabel(effectiveFuel, t)}</p><FuelBar level={effectiveFuel} light/>{partnerOverrideActive&&<p className="text-xs text-[#ff7a00] mt-1 font-black">{t("booking.fuel.officeOverride")}</p>}<p className="text-xs text-white/70 mt-1">{fmt(effectiveReadyAt)}</p></>
           : <p className="text-sm font-semibold text-black/40">{t("booking.fuel.waiting")}</p>}
       </div>
       {locked?(
-        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">{t("booking.fuel.confirmed", { who: partnerOverrideActive ? t("booking.fuel.officeRecorded").toLowerCase() : t("booking.fuel.driverRecorded").toLowerCase(), level: fuelLabel(effectiveFuel) })}</div>
+        <div className="bg-green-100 px-4 py-3 text-sm font-black text-green-800">{t("booking.fuel.confirmed", { who: partnerOverrideActive ? t("booking.fuel.officeRecorded").toLowerCase() : t("booking.fuel.driverRecorded").toLowerCase(), level: fuelLabel(effectiveFuel, t) })}</div>
       ):(
         <>
           {customerConfirmed&&<div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black mb-4">{t("booking.fuel.youConfirmed", { time: fmt(customerConfirmedAt) })}</div>}
@@ -408,8 +428,8 @@ function BidCard({ bid,requestStatus,acceptingId,expired,onAccept }: { bid:BidRo
   const reviewLabel = showReviews
     ? t("booking.review.hideReviews")
     : bid.review_count === 1
-    ? t("booking.review.readReviews", { count: bid.review_count })
-    : t("booking.review.readReviews.plural", { count: bid.review_count });
+    ? t("booking.review.readReviews", { count: String(bid.review_count) })
+    : t("booking.review.readReviews.plural", { count: String(bid.review_count) });
   return (
     <div className="bg-[#f0f0f0] p-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
