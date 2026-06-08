@@ -86,7 +86,6 @@ function toISOLocal(d: Date): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
-// Compact language toggle for the homepage nav
 function CompactLanguageToggle() {
   const { locale, setLocale } = useLanguage();
   const options: { code: Locale; label: string }[] = [
@@ -121,6 +120,7 @@ function CustomerHome() {
   const isDesktop = useIsDesktop();
   const { t } = useTranslation();
 
+  // Booking form state
   const [city,           setCity]          = useState<CityEntry>(DEFAULT_CITY);
   const [pickupAddress,  setPickupAddress]  = useState("");
   const [pickupLat,      setPickupLat]      = useState<number | null>(null);
@@ -148,8 +148,41 @@ function CustomerHome() {
   const [pickupLoading,  setPickupLoading]  = useState(false);
   const [dropoffLoading, setDropoffLoading] = useState(false);
 
+  // Nav auth state
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName,   setUserName]   = useState("");
+  const [burgerOpen, setBurgerOpen] = useState(false);
+  const burgerRef = useRef<HTMLDivElement>(null);
+
   const pickupTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dropoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load auth state for nav
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!mounted) return;
+      setIsLoggedIn(!!data?.user);
+      setUserName(
+        String(data?.user?.user_metadata?.full_name || "").trim() ||
+        String(data?.user?.email || "").split("@")[0] || ""
+      );
+    })();
+    return () => { mounted = false; };
+  }, [supabase]);
+
+  // Close burger on outside click
+  useEffect(() => {
+    if (!burgerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (burgerRef.current && !burgerRef.current.contains(e.target as Node)) {
+        setBurgerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [burgerOpen]);
 
   useEffect(() => {
     setAdditionalDriverAges(prev => {
@@ -169,6 +202,14 @@ function CustomerHome() {
       else                          window.location.replace("/partner/reset-password" + hash);
     }
   }, []);
+
+  async function handleLogout() {
+    try {
+      Object.keys(localStorage).filter(k => k.includes("sb-")).forEach(k => localStorage.removeItem(k));
+      await supabase.auth.signOut();
+    } catch {}
+    window.location.replace("/login?reason=signed_out");
+  }
 
   function buildSearchUrl(q: string) {
     return `/api/maps/search?q=${encodeURIComponent(q)}&lat=${city.lat}&lon=${city.lng}`;
@@ -364,15 +405,83 @@ function CustomerHome() {
         .react-datepicker__triangle { display: none; }
       `}</style>
 
+      {/* ── Nav ── */}
       <nav className="fixed left-0 top-0 z-50 w-full bg-black">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2.5">
           <Link href="/">
             <Image src="/camel-logo.png" alt="Camel Global — Meet and Greet Car Hire Spain" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
           </Link>
-          <div className="flex items-center gap-3">
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-3">
             <CompactLanguageToggle />
-            <Link href="/login" className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logIn")}</Link>
-            <Link href="/signup" className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.signUp")}</Link>
+            {isLoggedIn ? (
+              <>
+                <Link href="/book" className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
+                <Link href="/bookings" className="text-sm font-bold text-white hover:underline">{t("common.myBookings")}</Link>
+                {userName && <span className="hidden lg:block text-sm font-bold text-white">{t("common.hi", { name: userName })}</span>}
+                <button type="button" onClick={handleLogout} className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logout")}</button>
+              </>
+            ) : (
+              <>
+                <Link href="/signup" className="text-sm font-bold text-white hover:underline">{t("nav.signUp")}</Link>
+                <Link href="/login" className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logIn")}</Link>
+              </>
+            )}
+          </div>
+
+          {/* Mobile nav — New Booking always visible + burger */}
+          <div className="flex md:hidden items-center gap-2" ref={burgerRef}>
+            <Link href="/book" className="bg-[#ff7a00] px-3 py-2 text-xs font-black text-white hover:opacity-90 transition-opacity">
+              {t("common.newBooking")}
+            </Link>
+            <button
+              type="button"
+              onClick={() => setBurgerOpen(o => !o)}
+              aria-label={t("nav.burger.menu")}
+              className="flex flex-col justify-center items-center w-10 h-10 gap-1.5 border border-white/20 hover:bg-white/10 transition-colors"
+            >
+              <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "rotate-45 translate-y-2" : ""}`} />
+              <span className={`block h-0.5 w-5 bg-white transition-opacity ${burgerOpen ? "opacity-0" : ""}`} />
+              <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+            </button>
+
+            {/* Dropdown */}
+            {burgerOpen && (
+              <div className="absolute top-[68px] left-0 right-0 bg-black border-t border-white/10 z-50 py-3 space-y-0">
+                <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-widest text-white/40 mr-2">{t("nav.burger.menu")}</span>
+                  <CompactLanguageToggle />
+                </div>
+                {isLoggedIn ? (
+                  <>
+                    {userName && (
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <p className="text-sm font-bold text-white/50">{t("common.hi", { name: userName })}</p>
+                      </div>
+                    )}
+                    <Link href="/bookings" onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                      {t("common.myBookings")}
+                    </Link>
+                    <Link href="/account" onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                      {t("common.account")}
+                    </Link>
+                    <button type="button" onClick={handleLogout} className="block w-full text-left px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+                      {t("common.logout")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/signup" onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                      {t("nav.signUp")}
+                    </Link>
+                    <Link href="/login" onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+                      {t("common.logIn")}
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </nav>
