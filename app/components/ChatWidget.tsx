@@ -86,6 +86,10 @@ export default function ChatWidget({
 }) {
   const s = STRINGS[locale] ?? STRINGS.en;
 
+  // Always keep a fresh ref to the current locale so the send closure never captures a stale value
+  const localeRef = useRef<Locale>(locale);
+  useEffect(() => { localeRef.current = locale; }, [locale]);
+
   const [open, setOpen]             = useState(false);
   const [msgs, setMsgs]             = useState<Msg[]>([]);
   const [input, setInput]           = useState("");
@@ -189,7 +193,7 @@ export default function ChatWidget({
 
       const res = await fetch(apiPath, {
         method: "POST", headers,
-        body: JSON.stringify({ messages: newMsgs }),
+        body: JSON.stringify({ messages: newMsgs, locale: localeRef.current }),
       });
 
       if (!res.ok) {
