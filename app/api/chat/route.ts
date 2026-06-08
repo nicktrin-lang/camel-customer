@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     // Fetch customer's recent requests + bookings
     const db = createServiceRoleSupabaseClient();
-
+const locale = body?.locale === "es" ? "es" : "en";
     const { data: requests } = await db
       .from("customer_requests")
       .select("id, job_number, pickup_address, dropoff_address, pickup_at, dropoff_at, status, vehicle_category_name, passengers, notes, created_at")
@@ -174,7 +174,9 @@ TODAY'S DATE/TIME: ${new Date().toLocaleString("en-GB", { timeZone: "Europe/Madr
 == CUSTOMER'S BOOKING DATA ==
 ${bookingContext}
 
-Keep responses short and helpful. If a customer is frustrated, be empathetic. Never invent data — only share what is in the booking data above.`;
+Keep responses short and helpful. If a customer is frustrated, be empathetic. Never invent data — only share what is in the booking data above.
+
+IMPORTANT: You must respond in ${locale === "es" ? "Spanish" : "English"}.`;
 
     // Call Anthropic API with streaming
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
