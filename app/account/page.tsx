@@ -46,8 +46,8 @@ export default function AccountPage() {
         });
         if (res.ok) {
           const json = await res.json().catch(() => null);
-          if (json?.full_name)           setFullName(json.full_name);
-          if (json?.phone)               setPhone(json.phone);
+          if (json?.full_name)            setFullName(json.full_name);
+          if (json?.phone)                setPhone(json.phone);
           if (json?.communication_locale) setEmailLang(json.communication_locale);
         }
       } catch {}
@@ -68,7 +68,10 @@ export default function AccountPage() {
       if (metaErr) throw metaErr;
       const res = await fetch("/api/test-booking/customer-profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ user_id: session.user.id, full_name: fullName.trim() || null, phone: phone.trim() || null }),
       });
       if (!res.ok) {
@@ -88,11 +91,18 @@ export default function AccountPage() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
-      await fetch("/api/test-booking/customer-profile", {
+      const res = await fetch("/api/test-booking/customer-profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ user_id: session.user.id, communication_locale: lang }),
       });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || "Failed to save language preference.");
+      }
       setLangSaved(true);
       setTimeout(() => setLangSaved(false), 3000);
     } catch {}

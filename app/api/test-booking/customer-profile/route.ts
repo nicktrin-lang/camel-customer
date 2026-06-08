@@ -45,14 +45,15 @@ export async function POST(req: Request) {
 
     const db = createServiceRoleSupabaseClient();
 
-    const upsertData: Record<string, unknown> = {
-      user_id,
-      full_name: full_name ?? null,
-      phone: phone ?? null,
-    };
-    if (communication_locale) upsertData.communication_locale = communication_locale;
+    // Only include fields that were explicitly sent — never overwrite with undefined
+    const upsertData: Record<string, unknown> = { user_id };
+    if (full_name !== undefined)       upsertData.full_name = full_name ?? null;
+    if (phone !== undefined)           upsertData.phone = phone ?? null;
+    if (communication_locale !== undefined) upsertData.communication_locale = communication_locale;
 
-    const { error } = await db.from("customer_profiles").upsert(upsertData);
+    const { error } = await db
+      .from("customer_profiles")
+      .upsert(upsertData, { onConflict: "user_id" });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
