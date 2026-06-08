@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     // Fetch customer's recent requests + bookings
     const db = createServiceRoleSupabaseClient();
-const locale = body?.locale === "es" ? "es" : "en";
+    const locale = body?.locale === "es" ? "es" : "en";
     const { data: requests } = await db
       .from("customer_requests")
       .select("id, job_number, pickup_address, dropoff_address, pickup_at, dropoff_at, status, vehicle_category_name, passengers, notes, created_at")
