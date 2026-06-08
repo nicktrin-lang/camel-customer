@@ -103,10 +103,11 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | `lib/i18n/LanguageContext.tsx` | Copied from portal — same implementation |
 | `lib/i18n/useTranslation.ts` | Copied from portal — same implementation |
 | `lib/i18n/LanguageToggle.tsx` | Copied from portal — same implementation |
-| `lib/i18n/locales/en.json` | Customer EN strings — flat key-value format. **No duplicate keys** — cleaned in Chat 44. |
-| `lib/i18n/locales/es.json` | Customer ES strings — flat key-value format. **No duplicate keys** — cleaned in Chat 44. |
+| `lib/i18n/locales/en.json` | Customer EN strings — flat key-value format. **No duplicate keys** — cleaned in Chat 44. Includes `nav.signUp` key added Chat 45. |
+| `lib/i18n/locales/es.json` | Customer ES strings — flat key-value format. **No duplicate keys** — cleaned in Chat 44. Includes `nav.signUp` key added Chat 45. |
 | `lib/email.ts` | Customer email sender — `brandEmail()` pattern, EN/ES for all 3 customer emails. `sendCustomerBidReceivedEmail(to, jobNumber, locale)`, `sendCustomerBookingCompletedEmail(to, jobNumber, locale)`, `sendReviewReminderEmail(to, jobNumber, requestId, locale)`. PDFs stay English (NTUK). |
-| `app/ClientRootLayout.tsx` | Global layout — `LanguageProvider`, global header with **mobile burger menu** (language toggle + nav links inside burger; New Booking always visible outside). |
+| `app/ClientRootLayout.tsx` | Global layout — `LanguageProvider`, global header with **mobile burger menu** (language toggle + nav links inside burger; New Booking always visible outside). Used on all pages **except homepage** — homepage has its own inline nav. |
+| `app/page.tsx` | Customer homepage — has its **own inline nav** (not ClientRootLayout header). Auth-aware: loads session on mount, shows burger menu on mobile with language toggle + logged-in/out links. Desktop nav also auth-aware. |
 | `app/api/test-booking/customer-profile/route.ts` | GET + POST. GET reads `full_name, phone, communication_locale`. POST upserts including optional `communication_locale`. |
 
 ---
@@ -122,11 +123,18 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 - `LanguageProvider` wraps the entire app via `app/ClientRootLayout.tsx` — **both portal and customer**
 - `LanguageToggle` component renders EN | ES buttons — active locale highlighted in orange
 
+### Adding a new language (Phase 6)
+1. Copy `en.json` to e.g. `it.json` in both repos
+2. Translate all values (keys stay identical, preserve `{{placeholders}}`)
+3. Add `"it"` to the `Locale` type and `CompactLanguageToggle` options array in `LanguageContext.tsx` (both repos — one line each)
+4. Deploy — zero other code changes needed
+
 ### Customer site language toggle architecture
 - `LanguageProvider` is wired into `app/ClientRootLayout.tsx` in `camel-customer`
 - **Desktop:** `CompactLanguageToggle` inline in global header nav
 - **Mobile:** language toggle inside burger menu dropdown. New Booking button always visible outside burger.
 - `CompactLanguageToggle` is defined as a local inline function in each file that needs it
+- **Homepage** (`app/page.tsx`) has its own nav with the same burger pattern — independent of `ClientRootLayout`
 
 ### Portal mobile header language toggle architecture (CRITICAL)
 - **Partner portal topbar** (`PortalTopbar.tsx`) — `LanguageToggle` wrapped in `hidden lg:flex`. Hidden on mobile.
@@ -172,12 +180,12 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 
 ### Customer
 
-#### ✅ Phase 5 — Customer site (Complete — Chat 43 + Chat 44)
+#### ✅ Phase 5 — Customer site (Complete — Chat 43 + Chat 44 + Chat 45)
 
 | Item | File | Status |
 |------|------|--------|
 | i18n infrastructure | `lib/i18n/*`, `app/ClientRootLayout.tsx` | ✅ EN/ES |
-| Homepage | `app/page.tsx` | ✅ EN/ES |
+| Homepage | `app/page.tsx` | ✅ EN/ES + mobile burger menu (Chat 45) |
 | Footer | `app/components/Footer.tsx` | ✅ EN/ES |
 | Cookie banner | `app/components/CookieBanner.tsx` | ✅ EN/ES |
 | Login | `app/login/page.tsx` | ✅ EN/ES (incl. "Welcome back", placeholder) |
@@ -194,7 +202,7 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | Receipt PDF / Completion PDF | customer lib | ❌ Stays English (NTUK invoicing) |
 
 ### ❌ Phase 6 — Future languages (Future)
-IT, PT, FR, DE — add a new JSON file to both repos, zero code changes needed.
+IT, PT, FR, DE — add a new JSON file to both repos + one line in `LanguageContext.tsx`, zero other code changes needed.
 
 ---
 
@@ -331,11 +339,12 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 
 ## Mobile Header Architecture — Customer Site (CRITICAL)
 - **All non-homepage pages** use global header from `app/ClientRootLayout.tsx`
+- **Homepage** (`app/page.tsx`) has its own inline nav with identical burger behaviour
 - **Desktop (md+):** logo | CompactLanguageToggle | New Booking | My Bookings | Account | Hi Name | Logout (or Sign Up | Log In)
 - **Mobile:** logo | New Booking (always visible) | Burger button → dropdown with: language toggle row + greeting + My Bookings + Account + Logout (or Sign Up + Log In)
 - Burger closes on outside click and on route change
+- Both `ClientRootLayout.tsx` and `app/page.tsx` are auth-aware — load session on mount, show correct logged-in/out links
 - Checkout page has its own minimal header (no global header)
-- Homepage has its own inline nav (not the global header)
 
 ---
 
@@ -384,11 +393,12 @@ Lock logic: **effective fuel exists AND customer confirmed AND customer fuel mat
 | `v-stable-chat41-complete` | Chat 41 — no customer changes this chat |
 | `v-stable-chat43-phase5-i18n` | Chat 43 — Phase 5 complete: full customer site EN/ES i18n |
 | `v-stable-chat44-complete` | Chat 44 complete — all remaining i18n fixes, mobile burger menu, customer email locale preference, about/contact/account/bookings/booking detail/checkout/login fully translated |
+| `v-stable-chat45-complete` | Chat 45 complete — homepage mobile burger menu fix, nav.signUp translation key added |
 
 ### Rollback
 ```bash
 cd ~/camel-portal && git checkout v-stable-chat44-complete
-cd ~/camel-customer && git checkout v-stable-chat44-complete
+cd ~/camel-customer && git checkout v-stable-chat45-complete
 ```
 
 ---
@@ -430,15 +440,15 @@ cd ~/camel-customer && git checkout v-stable-chat44-complete
 - **Phase 4 complete** — partner emails EN/ES, bilingual T&Cs + operating rules PDFs, partner communication locale preference in settings
 - **Admin emails locale** — approval, rejection, live emails now sent in partner's `communication_locale`
 - **Phase 5 complete** — full customer site EN/ES i18n
-- **Customer mobile header** — burger menu with language toggle inside; New Booking always visible
+- **Customer mobile header** — burger menu with language toggle inside; New Booking always visible — on all pages including homepage
 - **Customer email locale** — `customer_profiles.communication_locale`, set in Account → Email Language
 - **All 3 customer emails EN/ES** — bid received, booking completed, review reminder
 - **Customer completion email EN/ES** — sent in customer's preferred language with full fuel summary + PDF
-- **Customer JSON files** — duplicate keys removed, all new booking/login/account/contact/about/checkout/bookings keys added
+- **Customer JSON files** — duplicate keys removed, all keys present including `nav.signUp`
 
 ---
 
-## What Needs Building — Next Chat (Chat 45)
+## What Needs Building — Next Chat
 
 ### 🔲 Lower priority (deferred)
 - Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
@@ -447,7 +457,7 @@ cd ~/camel-customer && git checkout v-stable-chat44-complete
 - Outreach: set up `e.camel-global.com` subdomain in Resend
 
 ### ❌ Phase 6 — Future languages (Future)
-IT, PT, FR, DE — add a new JSON file to both `camel-portal` and `camel-customer`, zero code changes needed.
+IT, PT, FR, DE — copy `en.json` to new locale file in both repos, translate values, add locale to `LanguageContext.tsx` (one line each repo). Zero other code changes needed.
 
 ---
 
@@ -459,6 +469,22 @@ A collaborator works on `camel-portal` from Windows (`C:/dev/camel-portal`). He 
 ---
 
 ## Session Log
+
+### Chat 45 (Completed)
+**Bug fixes: homepage mobile burger menu + nav.signUp missing translation key**
+
+**Customer repo changes:**
+1. `app/page.tsx` — homepage now has proper mobile burger menu matching all other pages; auth-aware nav on both desktop and mobile (loads session on mount, shows logged-in/out links correctly); `isLoggedIn`, `userName`, `burgerOpen`, `burgerRef` state added; `handleLogout` function added
+2. `lib/i18n/locales/en.json` — added missing `"nav.signUp": "Sign Up"` key (was rendering as raw key text in burger menu on all non-homepage pages)
+3. `lib/i18n/locales/es.json` — added missing `"nav.signUp": "Registrarse"` key
+
+**Stable tag:** `v-stable-chat45-complete` on camel-customer
+
+```bash
+cd ~/camel-customer && git tag -a v-stable-chat45-complete -m "Chat 45 complete — homepage burger menu fix" && git push origin v-stable-chat45-complete
+```
+
+---
 
 ### Chat 44 (Completed)
 **Customer i18n fixes, customer email locale, mobile burger menu**
@@ -552,4 +578,4 @@ git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 
 ---
 
-*Last updated: Chat 44 complete — customer i18n fully fixed (all pages), mobile burger menu, customer email locale preference (account page + DB), all 3 customer emails EN/ES, completion email EN/ES, review reminder EN/ES, bid email EN/ES. Next: Chat 45 — deferred items or Phase 6 future languages.*
+*Last updated: Chat 45 complete — homepage mobile burger menu fixed, nav.signUp translation key added to EN/ES JSON. Project is feature-complete and stable. Next: deferred items (VAT on invoices, Xero, DAC7, Resend subdomain) or Phase 6 future languages (IT/PT/FR/DE).*
