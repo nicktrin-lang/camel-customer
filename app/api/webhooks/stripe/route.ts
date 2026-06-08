@@ -32,6 +32,61 @@ async function getStripeFeeData(chargeId: string | null): Promise<{
   }
 }
 
+// Look up customer communication_locale from customer_profiles via email match
+async function getCustomerLocale(customerEmail: string): Promise<"en" | "es"> {
+  try {
+    const { data: usersData } = await db.auth.admin.listUsers();
+    const matchedUser = usersData?.users?.find(u => (u.email || "").toLowerCase() === customerEmail.toLowerCase());
+    if (!matchedUser) return "en";
+    const { data } = await db
+      .from("customer_profiles")
+      .select("communication_locale")
+      .eq("user_id", matchedUser.id)
+      .maybeSingle();
+    return (data?.communication_locale === "es") ? "es" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+// Look up partner communication_locale from partner_profiles
+async function getPartnerLocale(partnerUserId: string): Promise<"en" | "es"> {
+  try {
+    const { data } = await db
+      .from("partner_profiles")
+      .select("communication_locale")
+      .eq("user_id", partnerUserId)
+      .maybeSingle();
+    return (data?.communication_locale === "es") ? "es" : "en";
+  } catch {
+    return "en";
+  }
+}
+
+function brandEmail(
+  headingEN: string,
+  headingES: string,
+  bodyEN: string,
+  bodyES: string,
+  locale: "en" | "es"
+): string {
+  const heading = locale === "es" ? headingES : headingEN;
+  const body    = locale === "es" ? bodyES    : bodyEN;
+  const sign    = locale === "es"
+    ? `<p style="margin-top:32px;color:#888;font-size:14px;">Saludos,<br/><strong style="color:#222;">El equipo de Camel Global</strong></p>`
+    : `<p style="margin-top:32px;color:#888;font-size:14px;">Best regards,<br/><strong style="color:#222;">The Camel Global Team</strong></p>`;
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;color:#222;line-height:1.6;max-width:600px;">
+      <div style="background:#000;padding:24px 32px;">
+        <h2 style="color:#fff;margin:0;">${heading}</h2>
+      </div>
+      <div style="background:#f8f8f8;padding:24px 32px;border:1px solid #e5e5e5;">
+        ${body}
+        ${sign}
+      </div>
+    </div>`;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig  = req.headers.get("stripe-signature");
@@ -56,7 +111,6 @@ export async function POST(req: NextRequest) {
       const jobNumber     = m.job_number ? Number(m.job_number) : null;
       const chargeId      = typeof pi.latest_charge === "string" ? pi.latest_charge : null;
 
-      // Customer always pays in bid currency — no conversion
       const currency       = (m.currency || "EUR").toUpperCase();
       const carHirePrice   = Number(m.car_hire_price    || 0);
       const fuelPrice      = Number(m.fuel_price        || 0);
@@ -65,7 +119,6 @@ export async function POST(req: NextRequest) {
       const totalPrice     = carHirePrice + fuelPrice;
       const partnerNet     = Math.max(0, carHirePrice - commissionAmt);
 
-      // Load bid for original amounts + notes
       const { data: bid } = await db
         .from("partner_bids")
         .select("currency, notes, car_hire_price, fuel_price, total_price, vehicle_category_name, mileage_limit, security_deposit_notes")
@@ -78,7 +131,6 @@ export async function POST(req: NextRequest) {
       const notes         = bid?.notes || null;
       const vehicleCategory = bid?.vehicle_category_name || null;
 
-      // Load request — includes dropoff_at and journey_duration_minutes for receipt PDF
       const { data: request } = await db
         .from("customer_requests")
         .select(`
@@ -119,7 +171,6 @@ export async function POST(req: NextRequest) {
             winning_bid_id:        bidId,
             partner_user_id:       partnerUserId,
             booking_status:        "confirmed",
-            // currency = charge currency = bid currency (no conversion)
             currency,
             charge_currency:       currency,
             conversion_rate:       1,
@@ -160,7 +211,7 @@ export async function POST(req: NextRequest) {
         payout_status:            "held",
         stripe_fee:               feeData.stripe_fee,
         stripe_fee_currency:      feeData.stripe_fee_currency,
-        exchange_rate:            null, // no conversion
+        exchange_rate:            null,
       });
 
       const { data: payment } = await db
@@ -197,7 +248,13 @@ export async function POST(req: NextRequest) {
         : "—";
       const adminEmails = String(process.env.CAMEL_ADMIN_EMAILS || "").split(",").map(e => e.trim()).filter(Boolean);
 
-      // Generate + email booking receipt PDF
+      // Look up locales for customer and partner
+      const [customerLocale, partnerLocale] = await Promise.all([
+        request?.customer_email ? getCustomerLocale(request.customer_email) : Promise.resolve<"en" | "es">("en"),
+        getPartnerLocale(partnerUserId),
+      ]);
+
+      // ── Booking receipt PDF email (customer) ──────────────────────────────
       if (request?.customer_email) {
         sendBookingReceiptEmail({
           jobNumber,
@@ -228,85 +285,133 @@ export async function POST(req: NextRequest) {
         }).catch(e => console.error("Booking receipt PDF email failed:", e?.message));
       }
 
-      // Email customer
+      // ── Customer booking confirmed email (locale-aware) ───────────────────
       if (request?.customer_email) {
+        const custName = request.customer_name || (customerLocale === "es" ? "hola" : "there");
+
+        const priceTableEN = `
+          <table style="width:100%;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:4px 0;color:#666;">Booking reference</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Car hire partner</td><td style="text-align:right;">${companyName}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Pickup time</td><td style="text-align:right;">${pickupTime}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Pickup address</td><td style="text-align:right;">${request.pickup_address || "—"}</td></tr>
+            ${request.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Drop-off address</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
+            <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;color:#666;">Car hire</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Fuel deposit</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
+            <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;font-weight:700;">Total paid</td><td style="text-align:right;font-weight:700;">${fmtAmt(bidTotalPrice)}</td></tr>
+          </table>
+          <p style="margin:8px 0 0;font-size:13px;color:#666;">The fuel deposit will be refunded at the end of your hire based on fuel used.</p>`;
+
+        const priceTableES = `
+          <table style="width:100%;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:4px 0;color:#666;">Referencia de reserva</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Empresa de alquiler</td><td style="text-align:right;">${companyName}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Hora de recogida</td><td style="text-align:right;">${pickupTime}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Dirección de recogida</td><td style="text-align:right;">${request.pickup_address || "—"}</td></tr>
+            ${request.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Dirección de devolución</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
+            <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;color:#666;">Alquiler</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td></tr>
+            <tr><td style="padding:4px 0;color:#666;">Depósito de combustible</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
+            <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;font-weight:700;">Total pagado</td><td style="text-align:right;font-weight:700;">${fmtAmt(bidTotalPrice)}</td></tr>
+          </table>
+          <p style="margin:8px 0 0;font-size:13px;color:#666;">El depósito de combustible se reembolsará al finalizar el alquiler según el combustible utilizado.</p>`;
+
+        const custBodyEN = `
+          <p>Hi ${custName},</p>
+          <p>Your payment has been received and your booking is confirmed with <strong>${companyName}</strong>.</p>
+          <div style="background:#fff;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
+            <p style="margin:0 0 8px;font-weight:700;">Booking Summary</p>
+            ${priceTableEN}
+          </div>
+          <p style="font-size:13px;color:#666;">Your booking confirmation receipt will arrive in a separate email shortly.</p>
+          <p style="margin:24px 0;">
+            <a href="${siteUrl}/bookings/${requestId}" style="background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;display:inline-block;">View Booking</a>
+          </p>`;
+
+        const custBodyES = `
+          <p>Hola ${custName},</p>
+          <p>Tu pago ha sido recibido y tu reserva está confirmada con <strong>${companyName}</strong>.</p>
+          <div style="background:#fff;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
+            <p style="margin:0 0 8px;font-weight:700;">Resumen de la reserva</p>
+            ${priceTableES}
+          </div>
+          <p style="font-size:13px;color:#666;">El recibo de confirmación de tu reserva llegará en un correo aparte en breve.</p>
+          <p style="margin:24px 0;">
+            <a href="${siteUrl}/bookings/${requestId}" style="background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;display:inline-block;">Ver reserva</a>
+          </p>`;
+
         await sendEmail({
           to: request.customer_email,
-          subject: `Booking confirmed ${jobNo} — payment received`,
-          html: `
-            <div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
-              <div style="background:#000;padding:20px 28px;">
-                <h2 style="color:#fff;margin:0;">Booking Confirmed ✅</h2>
-                <p style="color:#999;margin:4px 0 0;font-size:13px;">Booking ${jobNo}</p>
-              </div>
-              <div style="padding:24px 28px;background:#fff;border:1px solid #eee;">
-                <p>Hi ${request.customer_name || "there"},</p>
-                <p>Your payment has been received and your booking is confirmed with <strong>${companyName}</strong>.</p>
-                <div style="background:#f8f8f8;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
-                  <p style="margin:0 0 8px;font-weight:700;">Booking Summary</p>
-                  <table style="width:100%;font-size:14px;border-collapse:collapse;">
-                    <tr><td style="padding:4px 0;color:#666;">Booking reference</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Car hire partner</td><td style="text-align:right;">${companyName}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Pickup</td><td style="text-align:right;">${pickupTime}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Pickup address</td><td style="text-align:right;">${request.pickup_address || "—"}</td></tr>
-                    ${request.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Drop-off address</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
-                    <tr style="border-top:1px solid #ddd;">
-                      <td style="padding:8px 0 4px;color:#666;">Car hire</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td>
-                    </tr>
-                    <tr><td style="padding:4px 0;color:#666;">Fuel deposit</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
-                    <tr style="border-top:1px solid #ddd;">
-                      <td style="padding:8px 0 4px;font-weight:700;">Total paid</td>
-                      <td style="text-align:right;font-weight:700;">${fmtAmt(bidTotalPrice)}</td>
-                    </tr>
-                  </table>
-                  <p style="margin:8px 0 0;font-size:13px;color:#666;">The fuel deposit will be refunded at the end of your hire based on fuel used.</p>
-                </div>
-                <p style="font-size:13px;color:#666;">Your booking confirmation receipt will arrive in a separate email shortly.</p>
-                <a href="${siteUrl}/bookings/${requestId}" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;margin-top:8px;">View Booking</a>
-                <p style="margin-top:24px;color:#999;font-size:13px;">The Camel Global Team</p>
-              </div>
-            </div>
-          `,
+          subject: customerLocale === "es"
+            ? `Reserva confirmada ${jobNo} — pago recibido`
+            : `Booking confirmed ${jobNo} — payment received`,
+          html: brandEmail(
+            "Booking Confirmed ✅",
+            "Reserva confirmada ✅",
+            custBodyEN,
+            custBodyES,
+            customerLocale,
+          ),
         }).catch(e => console.error("Customer booking confirmed email failed:", e?.message));
       }
 
-      // Email partner
+      // ── Partner new booking email (locale-aware) ──────────────────────────
       if (partnerEmail) {
+        const partnerName = partnerProfile?.contact_name || companyName;
+
+        const partnerBodyEN = `
+          <p>Hi ${partnerName},</p>
+          <p>A customer has paid and confirmed booking ${jobNo}. Please prepare for collection.</p>
+          <div style="background:#fff;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
+            <p style="margin:0 0 8px;font-weight:700;">Booking Details</p>
+            <table style="width:100%;font-size:14px;border-collapse:collapse;">
+              <tr><td style="padding:4px 0;color:#666;">Booking reference</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Customer</td><td style="text-align:right;">${request?.customer_name || "—"}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Pickup time</td><td style="text-align:right;">${pickupTime}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Pickup address</td><td style="text-align:right;">${request?.pickup_address || "—"}</td></tr>
+              ${request?.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Drop-off address</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
+              <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;color:#666;">Car hire</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Fuel deposit</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
+            </table>
+          </div>
+          <p style="margin:24px 0;">
+            <a href="${portalUrl}/partner/bookings/${bookingId}" style="background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;display:inline-block;">View Booking</a>
+          </p>`;
+
+        const partnerBodyES = `
+          <p>Hola ${partnerName},</p>
+          <p>Un cliente ha pagado y confirmado la reserva ${jobNo}. Por favor, prepárate para la recogida.</p>
+          <div style="background:#fff;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
+            <p style="margin:0 0 8px;font-weight:700;">Detalles de la reserva</p>
+            <table style="width:100%;font-size:14px;border-collapse:collapse;">
+              <tr><td style="padding:4px 0;color:#666;">Referencia de reserva</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Cliente</td><td style="text-align:right;">${request?.customer_name || "—"}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Hora de recogida</td><td style="text-align:right;">${pickupTime}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Dirección de recogida</td><td style="text-align:right;">${request?.pickup_address || "—"}</td></tr>
+              ${request?.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Dirección de devolución</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
+              <tr style="border-top:1px solid #ddd;"><td style="padding:8px 0 4px;color:#666;">Alquiler</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td></tr>
+              <tr><td style="padding:4px 0;color:#666;">Depósito de combustible</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
+            </table>
+          </div>
+          <p style="margin:24px 0;">
+            <a href="${portalUrl}/partner/bookings/${bookingId}" style="background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;display:inline-block;">Ver reserva</a>
+          </p>`;
+
         await sendEmail({
           to: partnerEmail,
-          subject: `New booking confirmed ${jobNo}`,
-          html: `
-            <div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
-              <div style="background:#000;padding:20px 28px;">
-                <h2 style="color:#fff;margin:0;">New Booking Confirmed</h2>
-                <p style="color:#999;margin:4px 0 0;font-size:13px;">Booking ${jobNo}</p>
-              </div>
-              <div style="padding:24px 28px;background:#fff;border:1px solid #eee;">
-                <p>Hi ${partnerProfile?.contact_name || companyName},</p>
-                <p>A customer has paid and confirmed booking ${jobNo}. Please prepare for collection.</p>
-                <div style="background:#f8f8f8;padding:16px;margin:16px 0;border-left:4px solid #ff7a00;">
-                  <p style="margin:0 0 8px;font-weight:700;">Booking Details</p>
-                  <table style="width:100%;font-size:14px;border-collapse:collapse;">
-                    <tr><td style="padding:4px 0;color:#666;">Booking reference</td><td style="text-align:right;font-weight:700;">${jobNo}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Customer</td><td style="text-align:right;">${request?.customer_name || "—"}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Pickup time</td><td style="text-align:right;">${pickupTime}</td></tr>
-                    <tr><td style="padding:4px 0;color:#666;">Pickup address</td><td style="text-align:right;">${request?.pickup_address || "—"}</td></tr>
-                    ${request?.dropoff_address ? `<tr><td style="padding:4px 0;color:#666;">Drop-off address</td><td style="text-align:right;">${request.dropoff_address}</td></tr>` : ""}
-                    <tr style="border-top:1px solid #ddd;">
-                      <td style="padding:8px 0 4px;color:#666;">Car hire</td><td style="text-align:right;">${fmtAmt(bidCarHire)}</td>
-                    </tr>
-                    <tr><td style="padding:4px 0;color:#666;">Fuel deposit</td><td style="text-align:right;">${fmtAmt(bidFuel)}</td></tr>
-                  </table>
-                </div>
-                <a href="${portalUrl}/partner/bookings/${bookingId}" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;margin-top:8px;">View Booking</a>
-                <p style="margin-top:24px;color:#999;font-size:13px;">The Camel Global Team</p>
-              </div>
-            </div>
-          `,
+          subject: partnerLocale === "es"
+            ? `Nueva reserva confirmada ${jobNo}`
+            : `New booking confirmed ${jobNo}`,
+          html: brandEmail(
+            "New Booking Confirmed",
+            "Nueva reserva confirmada",
+            partnerBodyEN,
+            partnerBodyES,
+            partnerLocale,
+          ),
         }).catch(e => console.error("Partner new booking email failed:", e?.message));
       }
 
-      // Email admin
+      // ── Admin email (always English, full details) ────────────────────────
       for (const adminEmail of adminEmails) {
         await sendEmail({
           to: adminEmail,
@@ -318,6 +423,8 @@ export async function POST(req: NextRequest) {
                 <strong>Booking:</strong> ${jobNo}<br/>
                 <strong>Partner:</strong> ${companyName}<br/>
                 <strong>Customer:</strong> ${request?.customer_name || "—"} (${request?.customer_email || "—"})<br/>
+                <strong>Customer email locale:</strong> ${customerLocale}<br/>
+                <strong>Partner email locale:</strong> ${partnerLocale}<br/>
                 <strong>Pickup:</strong> ${pickupTime}<br/>
                 <strong>Pickup address:</strong> ${request?.pickup_address || "—"}<br/>
                 <strong>Currency:</strong> ${currency}<br/>
@@ -333,7 +440,7 @@ export async function POST(req: NextRequest) {
         }).catch(e => console.error("Admin new booking email failed:", e?.message));
       }
 
-      console.log(`payment_intent.succeeded: booking ${bookingId} — currency ${currency}, fee ${feeData.stripe_fee} ${feeData.stripe_fee_currency}`);
+      console.log(`payment_intent.succeeded: booking ${bookingId} — currency ${currency}, fee ${feeData.stripe_fee} ${feeData.stripe_fee_currency}, customer locale ${customerLocale}, partner locale ${partnerLocale}`);
     }
   } catch (e: any) {
     console.error("Webhook handler error:", e.message);
