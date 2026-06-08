@@ -3,13 +3,58 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 type Msg = { role: "user" | "assistant"; content: string };
+type Locale = "en" | "es";
 
-const SUGGESTIONS = [
-  "Where is my driver?",
-  "What is my booking status?",
-  "How does the fuel deposit work?",
-  "How do I cancel a booking?",
-];
+const STRINGS: Record<Locale, {
+  suggestions: string[];
+  welcome: string;
+  endChat: string;
+  sendingTranscript: string;
+  endedTranscript: string;
+  endedNoTranscript: string;
+  startNew: string;
+  subtitle: string;
+  placeholder: string;
+  errorFailed: string;
+  errorGeneric: string;
+}> = {
+  en: {
+    suggestions: [
+      "Where is my driver?",
+      "What is my booking status?",
+      "How does the fuel deposit work?",
+      "How do I cancel a booking?",
+    ],
+    welcome: "👋 Hi! I'm Camel Help. I can answer questions about your bookings, driver details, fuel deposits, and more. How can I help?",
+    endChat: "End chat",
+    sendingTranscript: "Sending transcript…",
+    endedTranscript: "✅ Chat ended. A transcript has been emailed to you.",
+    endedNoTranscript: "Chat ended.",
+    startNew: "Start new chat",
+    subtitle: "AI assistant · usually instant",
+    placeholder: "Type a message…",
+    errorFailed: "Failed to get a response.",
+    errorGeneric: "Something went wrong. Please try again.",
+  },
+  es: {
+    suggestions: [
+      "¿Dónde está mi conductor?",
+      "¿Cuál es el estado de mi reserva?",
+      "¿Cómo funciona el depósito de combustible?",
+      "¿Cómo cancelo una reserva?",
+    ],
+    welcome: "👋 ¡Hola! Soy Camel Help. Puedo responder preguntas sobre tus reservas, detalles del conductor, depósitos de combustible y más. ¿En qué puedo ayudarte?",
+    endChat: "Finalizar chat",
+    sendingTranscript: "Enviando transcripción…",
+    endedTranscript: "✅ Chat finalizado. Se te ha enviado una transcripción por correo.",
+    endedNoTranscript: "Chat finalizado.",
+    startNew: "Nuevo chat",
+    subtitle: "Asistente IA · normalmente instantáneo",
+    placeholder: "Escribe un mensaje…",
+    errorFailed: "No se pudo obtener una respuesta.",
+    errorGeneric: "Algo salió mal. Por favor, inténtalo de nuevo.",
+  },
+};
 
 function renderText(text: string) {
   const phoneRe = /(\+?[\d ()[\]-]{9,15})/g;
@@ -32,11 +77,15 @@ export default function ChatWidget({
   getToken,
   apiPath = "/api/chat",
   transcriptApiPath = "/api/chat/transcript",
+  locale = "en",
 }: {
   getToken: () => Promise<string | null>;
   apiPath?: string;
   transcriptApiPath?: string;
+  locale?: Locale;
 }) {
+  const s = STRINGS[locale] ?? STRINGS.en;
+
   const [open, setOpen]             = useState(false);
   const [msgs, setMsgs]             = useState<Msg[]>([]);
   const [input, setInput]           = useState("");
@@ -145,7 +194,7 @@ export default function ChatWidget({
 
       if (!res.ok) {
         const j = await res.json().catch(() => null);
-        throw new Error(j?.error || "Failed to get a response.");
+        throw new Error(j?.error || s.errorFailed);
       }
 
       const reader = res.body!.getReader();
@@ -166,7 +215,7 @@ export default function ChatWidget({
 
       if (!open) setUnread(u => u + 1);
     } catch (e: any) {
-      setError(e?.message || "Something went wrong. Please try again.");
+      setError(e?.message || s.errorGeneric);
       setMsgs(m => m.length > 0 && m[m.length - 1].role === "assistant" && m[m.length - 1].content === "" ? m.slice(0, -1) : m);
     } finally {
       setLoading(false);
@@ -250,13 +299,13 @@ export default function ChatWidget({
               </div>
               <div>
                 <p className="text-sm font-black text-white leading-none">Camel Help</p>
-                <p className="text-xs text-white/50 mt-0.5">AI assistant · usually instant</p>
+                <p className="text-xs text-white/50 mt-0.5">{s.subtitle}</p>
               </div>
             </div>
             {!ended && msgs.length > 0 && (
               <button type="button" onClick={endChat}
                 className="text-xs font-bold text-white/50 hover:text-white border border-white/20 px-2 py-1 transition-colors">
-                End chat
+                {s.endChat}
               </button>
             )}
           </div>
@@ -266,13 +315,13 @@ export default function ChatWidget({
             {isEmpty && !ended && (
               <div className="space-y-3">
                 <div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black max-w-[85%]">
-                  👋 Hi! I&apos;m Camel Help. I can answer questions about your bookings, driver details, fuel deposits, and more. How can I help?
+                  {s.welcome}
                 </div>
                 <div className="space-y-2 pt-1">
-                  {SUGGESTIONS.map(s => (
-                    <button key={s} type="button" onClick={() => send(s)}
+                  {s.suggestions.map(suggestion => (
+                    <button key={suggestion} type="button" onClick={() => send(suggestion)}
                       className="block w-full text-left border border-black/10 px-3 py-2 text-xs font-bold text-black hover:bg-[#f0f0f0] transition-colors">
-                      {s}
+                      {suggestion}
                     </button>
                   ))}
                 </div>
@@ -298,11 +347,11 @@ export default function ChatWidget({
             {ended && (
               <div className="space-y-3 pt-2">
                 <div className="bg-[#f0f0f0] px-4 py-3 text-sm font-semibold text-black">
-                  {sendingEmail ? "Sending transcript…" : emailSent ? "✅ Chat ended. A transcript has been emailed to you." : "Chat ended."}
+                  {sendingEmail ? s.sendingTranscript : emailSent ? s.endedTranscript : s.endedNoTranscript}
                 </div>
                 <button type="button" onClick={startNew}
                   className="w-full bg-[#ff7a00] py-3 text-sm font-black text-white hover:opacity-90 transition-opacity">
-                  Start new chat
+                  {s.startNew}
                 </button>
               </div>
             )}
@@ -323,7 +372,7 @@ export default function ChatWidget({
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={onKey}
                 disabled={loading}
-                placeholder="Type a message…"
+                placeholder={s.placeholder}
                 className="flex-1 resize-none bg-[#f0f0f0] px-3 py-2.5 text-sm font-medium text-black outline-none placeholder:text-black/30 disabled:opacity-50"
                 style={{ maxHeight: "80px" }}
               />
