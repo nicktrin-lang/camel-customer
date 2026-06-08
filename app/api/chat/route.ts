@@ -139,7 +139,9 @@ export async function POST(req: Request) {
 
     const customerName = String(user.user_metadata?.full_name || user.email || "the customer").split("@")[0];
 
-    const systemPrompt = `You are Camel Help, the friendly AI assistant for Camel Global — a meet & greet car hire platform operating in Spain.
+    const systemPrompt = `CRITICAL: You must respond ONLY in ${locale === "es" ? "Spanish" : "English"}. This is mandatory and overrides everything else.
+
+You are Camel Help, the friendly AI assistant for Camel Global — a meet & greet car hire platform operating in Spain.
 
 You are talking to a CUSTOMER named ${customerName}.
 
