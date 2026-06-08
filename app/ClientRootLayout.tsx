@@ -240,7 +240,7 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
       {!isComingSoonPage && <CookieBanner />}
 
       {isCustomerLoggedIn && !isComingSoonPage && (
-        <ChatWidget getToken={getToken} apiPath="/api/chat" />
+        <ChatWidget key={locale} getToken={getToken} apiPath="/api/chat" locale={locale as "en" | "es"} />
       )}
     </>
   );
