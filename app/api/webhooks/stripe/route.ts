@@ -269,6 +269,7 @@ export async function POST(req: NextRequest) {
           durationMinutes:      request.journey_duration_minutes ?? null,
           vehicleCategory:      request.vehicle_category_name || vehicleCategory || null,
           companyName,
+          locale:               customerLocale,
           chargeCurrency:       currency,
           chargeCarHire:        bidCarHire,
           chargeFuel:           bidFuel,
