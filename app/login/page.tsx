@@ -70,7 +70,7 @@ function LoginForm() {
       document.cookie = "resetPortal=customer; domain=.camel-global.com; path=/; max-age=3600";
       const res  = await fetch("/api/auth/send-customer-reset-email", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), redirectTo: `${window.location.origin}/?portal=customer` }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to send reset email.");
