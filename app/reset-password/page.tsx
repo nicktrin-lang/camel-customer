@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerAuthSupabaseClient } from "@/lib/supabase/auth-client";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+
+const inputCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
+const labelCls = "block text-xs font-black uppercase tracking-widest text-black mb-2";
 
 function ResetPasswordInner() {
   const authClient = useMemo(() => createCustomerAuthSupabaseClient(), []);
@@ -60,55 +64,83 @@ function ResetPasswordInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc] flex items-center justify-center py-10 px-4">
-      <div className="w-full max-w-md">
-        <div className="rounded-3xl border border-black/5 bg-white p-8 shadow-[0_18px_45px_rgba(0,0,0,0.08)]">
-          {sessionError ? (
-            <>
-              <h1 className="text-3xl font-black text-[#003768]">Link Expired</h1>
-              <p className="mt-2 text-slate-600">{sessionError}</p>
-              <a href="/login" className="mt-6 inline-block rounded-full bg-[#ff7a00] px-6 py-3 font-bold text-white shadow-[0_8px_18px_rgba(255,122,0,0.3)] hover:opacity-95">
-                ← {t("common.back")}
-              </a>
-            </>
-          ) : success ? (
-            <>
-              <h1 className="text-3xl font-black text-[#003768]">{t("reset.success")} ✓</h1>
-              <p className="mt-2 text-slate-600">Redirecting you to login…</p>
-            </>
-          ) : !sessionReady ? (
-            <p className="text-slate-600">{t("common.loading")}</p>
-          ) : (
-            <>
-              <h1 className="text-3xl font-black text-[#003768]">{t("reset.title")}</h1>
-              <p className="mt-1 text-slate-500">Choose a new password for your account.</p>
-              {error && <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-[#003768] mb-1.5">{t("reset.newPassword")}</label>
-                  <input type="password" required autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
-                    placeholder="Min. 8 characters"
-                    className="w-full rounded-xl border border-black/10 px-4 py-3 outline-none focus:border-[#003768]" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-[#003768] mb-1.5">Confirm new password</label>
-                  <input type="password" required autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                    placeholder="Repeat your password"
-                    className="w-full rounded-xl border border-black/10 px-4 py-3 outline-none focus:border-[#003768]" />
-                </div>
-                <button type="submit" disabled={loading}
-                  className="w-full rounded-xl bg-[#ff7a00] py-3 font-bold text-white shadow-[0_8px_18px_rgba(255,122,0,0.3)] hover:opacity-95 disabled:opacity-60">
-                  {loading ? t("common.loading") : t("reset.updatePassword")}
-                </button>
-              </form>
-            </>
-          )}
+    <div className="min-h-screen bg-white flex flex-col">
+
+      <div className="w-full bg-black px-6 py-16 text-white">
+        <div className="mx-auto max-w-md">
+          <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">
+            {t("common.account")}
+          </p>
+          <h1 className="text-4xl font-black text-white md:text-5xl">
+            {t("reset.title")}
+          </h1>
+          <p className="mt-3 text-base font-semibold text-white/70">
+            {t("reset.subtitle") || "Choose a new password for your account."}
+          </p>
         </div>
       </div>
+
+      <div className="w-full bg-[#f0f0f0] px-6 py-12 flex-1">
+        <div className="mx-auto max-w-md">
+          <div className="bg-white p-8 space-y-5">
+            {sessionError ? (
+              <>
+                <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00]">Link Expired</p>
+                <h2 className="text-2xl font-black text-black">{sessionError}</h2>
+                <Link href="/login"
+                  className="inline-block bg-[#ff7a00] px-6 py-4 text-sm font-black text-white hover:opacity-90 transition-opacity">
+                  ← {t("common.back")}
+                </Link>
+              </>
+            ) : success ? (
+              <>
+                <p className="text-xs font-black uppercase tracking-widest text-[#ff7a00]">✓ {t("reset.success")}</p>
+                <h2 className="text-2xl font-black text-black">Redirecting you to login…</h2>
+              </>
+            ) : !sessionReady ? (
+              <p className="text-sm font-semibold text-black/50">{t("common.loading")}</p>
+            ) : (
+              <>
+                {error && (
+                  <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                    {error}
+                  </div>
+                )}
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className={labelCls}>{t("reset.newPassword")}</label>
+                    <input
+                      type="password" required autoComplete="new-password"
+                      value={password} onChange={e => setPassword(e.target.value)}
+                      placeholder="Min. 8 characters"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Confirm new password</label>
+                    <input
+                      type="password" required autoComplete="new-password"
+                      value={confirm} onChange={e => setConfirm(e.target.value)}
+                      placeholder="Repeat your password"
+                      className={inputCls}
+                    />
+                  </div>
+                  <button
+                    type="submit" disabled={loading}
+                    className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
+                    {loading ? t("common.loading") : t("reset.updatePassword") + " →"}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
 
 export default function ResetPasswordPage() {
-  return <Suspense fallback={<div className="min-h-screen bg-[#f7f9fc]" />}><ResetPasswordInner /></Suspense>;
+  return <Suspense fallback={<div className="min-h-screen bg-white" />}><ResetPasswordInner /></Suspense>;
 }
