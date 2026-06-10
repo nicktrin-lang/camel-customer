@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
-  const next = "/partner/reset-password";
+  const next = "/reset-password";
 
   const cookieStore = await cookies();
 
