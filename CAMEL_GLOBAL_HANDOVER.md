@@ -27,6 +27,7 @@ Portal email.ts is large — never replace it with a partial file. Always restor
 **Always tell Claude which sed commands failed — sed on disk is the only reliable way to make small changes to deployed files.**
 **When making changes with sed, always verify with grep afterwards before committing.**
 **Always label artifacts with the destination file path so the user knows where to copy them.**
+**multiline sed never works in zsh — always use separate sed commands per line, or write a full file artifact.**
 
 
 ## Project Overview
@@ -82,10 +83,10 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | lib/portal/syncBookingStatuses.ts | Booking status sync logic |
 | lib/portal/refreshPartnerLiveStatus.ts | Core live status — checks all 7 requirements |
 | lib/portal/triggerPartnerLiveRefresh.ts | Triggers the live status refresh |
-| lib/portal/operatingRules.ts | Shared OPERATING_RULES + OPERATING_RULES_ES data + downloadOperatingRulesPDF(companyName, locale). Includes section 3b — mileage limits & security deposits. Bilingual PDF when locale="es". |
+| lib/portal/operatingRules.ts | Shared OPERATING_RULES + OPERATING_RULES_ES data + downloadOperatingRulesPDF(companyName, locale). Includes section 3b — mileage limits & security deposits. Section 9 includes chargeback/dispute payout hold clause (EN+ES). Bilingual PDF when locale="es". |
 | lib/portal/completeBooking.tsx | Shared completion logic — Stripe fuel refund, payout_status=ready, generates + emails completion statement PDF to customer. Sends rich completion email with fuel summary + payout summary (commission breakdown) to partner in their communication_locale. Customer email now sent in customer's communication_locale (EN/ES). Admin email includes full commission breakdown + customer locale used. Uses direct REST fetch to portal Supabase to query customer_requests. Logo read from disk via fs.readFileSync. |
 | lib/portal/generateCommissionInvoice.tsx | Commission invoice PDF generator — uses created_at from partner_bookings as the date column (pickup_at does not exist on that table). Shows all bookings including zero-commission cancelled ones. |
-| lib/portal/partnerTerms.ts | Single source of truth for partner T&Cs — PARTNER_TERMS, PARTNER_TERMS_ES, TERMS_VERSION, TERMS_EFFECTIVE, downloadPartnerTermsPDF(locale). Both signup/page.tsx and terms/page.tsx import from here. Bilingual PDF when locale="es". Never duplicate terms content. |
+| lib/portal/partnerTerms.ts | Single source of truth for partner T&Cs — PARTNER_TERMS, PARTNER_TERMS_ES, TERMS_VERSION, TERMS_EFFECTIVE, downloadPartnerTermsPDF(locale). Both signup/page.tsx and terms/page.tsx import from here. Bilingual PDF when locale="es". Never duplicate terms content. Clause 7 includes chargeback/dispute payout hold clause. |
 | lib/rateLimit.ts | In-memory rate limiter — 3 req / 15 min per IP |
 | lib/hcaptcha.ts | Server-side hCaptcha token verification |
 | lib/currency.ts | All currency utilities — EUR, GBP, USD formatting + conversion |
@@ -260,6 +261,52 @@ const commAmt = Math.max((car_hire_price * commission_rate) / 100, 10);
 const partnerPayout = Math.max(0, car_hire_price - commAmt + fuel_charge);
 ```
 
+### Stripe account (CRITICAL)
+- Live Stripe account is set up under NTUK Ltd as a Limited Company
+- Business model: Marketplace (customers pay Camel Global, Camel pays out to partners)
+- Old sandbox account was set up as sole trader — do NOT use it for live
+- Live keys are set in Vercel env vars for both camel-portal-live and camel-customer-live
+- Webhook endpoint: https://www.camel-global.com/api/webhooks/stripe — event: payment_intent.succeeded
+- STRIPE_WEBHOOK_SECRET is set in camel-customer-live only (that's where the webhook handler lives)
+- STRIPE_SECRET_KEY is set in both projects (portal needs it for Connect transfers and refunds)
+
+## Payout Hold / Dispute Architecture (CRITICAL — Chat 48)
+When a customer raises a dispute or chargeback, admin can place a booking's payout on hold.
+
+### DB columns added (Chat 48):
+- partner_bookings.payout_hold boolean DEFAULT false
+- partner_bookings.payout_hold_reason text
+
+### How it works:
+- On booking completion, payout_status = "ready" — funds sit in Camel's Stripe balance
+- Admin goes to admin booking detail → "Payout Hold" card → enters reason → clicks "Hold Payout"
+- Monthly cron (app/cron/monthly-payout/route.ts) skips any booking where payout_hold = true
+- Once resolved, admin clicks "Release Payout Hold" → booking is included in next monthly run
+- Partner sees amber "Payment Disputed" banner on their booking detail — no reason shown
+- Admin sees full hold reason + release button
+
+### Where disputed status appears:
+- Admin bookings list — amber "Disputed" status pill
+- Admin booking detail — amber banner at top + Payout Hold card
+- Admin reports — amber "Disputed" pill in both tables, "Disputed" filter option in status dropdown
+- Admin reports CSV — Booking Status and Payout Status columns show "Disputed" / "On Hold"
+- Admin financial dashboard — "Disputed (N)" card per currency showing held payout amounts
+- Partner bookings list — amber "Disputed" status pill
+- Partner booking detail — amber "Payment Disputed" banner
+- Partner reports — amber "Disputed" pill, "Disputed" filter (translated EN/ES), Disputed summary card per currency
+- Partner reports CSV — Booking Status and Payout Status columns show "Disputed" / "On Hold"
+- Partner bookings CSV — Payout Hold Yes/No column
+
+### Partner email lookup (CRITICAL):
+Partner email is on partner_applications.email (NOT partner_profiles). Admin booking detail fetches it via:
+```typescript
+const { data: applicationRow } = await db
+  .from("partner_applications")
+  .select("email")
+  .eq("user_id", bookingRow.partner_user_id)
+  .maybeSingle();
+```
+
 ## Fuel Override Architecture (CRITICAL)
 Effective fuel = partner override (collection_fuel_level_partner) if set, else driver reading (collection_fuel_level_driver).
 
@@ -273,7 +320,8 @@ Commission invoices stay in English — NTUK is a UK company
 ## Partner Terms Architecture (CRITICAL)
 
 Single source of truth: lib/portal/partnerTerms.ts
-Current version: 2026-06b effective 1 June 2026
+Current version: 2026-06c effective 10 June 2026
+Clause 7 includes chargeback/dispute payout hold clause (EN only — ES version in operatingRules.ts)
 
 
 ## Security Architecture
@@ -281,6 +329,8 @@ Current version: 2026-06b effective 1 June 2026
 CSP form-action — portal: 'self' only; customer: 'self' https://checkout.stripe.com https://*.stripe.com
 Stripe Radar — enabled
 2FA: Vercel, GitHub, Supabase, Gmail — all done ✅
+Domain Guard — activated on camel-global.com in Fasthosts ✅
+SSL — handled by Vercel on all domains ✅
 
 
 ## PDF Logo Architecture
@@ -300,22 +350,29 @@ Files: all in camel-portal only.
 | app/api/admin/outreach/prospects/route.ts | GET/POST prospects |
 | app/api/admin/outreach/prospects/[id]/route.ts | PATCH/DELETE prospect |
 | app/api/admin/outreach/unsubscribe/route.ts | Public GET — sets unsubscribed=true, redirects to portal homepage with ?unsubscribed=true banner |
-| app/HomePageContent.tsx | Shows unsubscribed banner when ?unsubscribed=true |
+| app/HomePageContent.tsx | Shows unsubscribed banner when ?unsubscribed=true. Also has customer site section linking to camel-global.com. GA outreach CTA click tracking. |
 | public/camel-logo-white-new.png | White version of camel logo for use in outreach emails (email clients don't support CSS filter) |
 
 ### Outreach email rules
-- Sent from: `Camel Global Partners <partners@camel-global.com>`
+- Sent from: `Camel Global <noreply@camel-global.com>`
 - Subject EN: `Camel Global - Meet & Greet Car Hire - Founding Partner Invitation`
 - Subject ES: `Camel Global - Meet & Greet Alquiler de Coches - Invitación a Socio Fundador`
 - Logo: `https://portal.camel-global.com/camel-logo-white-new.png` — white PNG, no CSS filter needed
 - Email body is fully hardcoded — no AI generation. Opening line personalised with contact first name and city.
 - Language: Spain → Spanish, all other countries → English
 - Daily limit: 50 emails
+- UTM params on all links: utm_source=outreach, utm_medium=email, utm_campaign=founding-partner, utm_content=signup-button, utm_term={country-slug}, ref={prospect_id}
 - Batch send: pending prospects only, respects country filter, never includes Send Again
 - Send Again: manual only, all non-unsubscribed rows, counts towards daily limit
 - Unsubscribe: List-Unsubscribe header set on every email (Resend one-click). Link in footer sets unsubscribed=true on prospect record. Unsubscribed prospects are never sent to even on resend.
 - DB column: outreach_prospects.unsubscribed boolean (added Chat 47)
 - "unsub" badge shown on unsubscribed rows in the table
+
+### GA tracking for outreach (Chat 48)
+- UTM params on all email links — GA attributes sessions automatically
+- outreach_cta_click event fires on Sign Up CTA clicks (hero, apply, final-cta sections) when utm_source=outreach
+- partner_signup_complete event fires on application-submitted page when status=pending
+- Both events pass utm_term (country) and utm_campaign for breakdown in GA
 
 ### logo generation command (run if camel-logo-white-new.png ever needs regenerating)
 ```bash
@@ -339,6 +396,9 @@ Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert
 | Variable | Repo | Value |
 |---|---|---|
 | NEXT_PUBLIC_SITE_URL | camel-customer (Vercel) | https://www.camel-global.com — must be set or review email links break |
+| STRIPE_SECRET_KEY | both projects | Live sk_live_... key from NTUK Ltd Stripe account |
+| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | camel-customer | Live pk_live_... key |
+| STRIPE_WEBHOOK_SECRET | camel-customer only | Live whsec_... from Stripe webhook endpoint |
 
 ## Email Addresses
 | Address | Type | Forwards to |
@@ -346,6 +406,7 @@ Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert
 | info@camel-global.com | Mailbox (Mail Lite, Fasthosts) | Gmail via POP |
 | contact@camel-global.com | Forwarder | artur@ + info@ |
 | partners@camel-global.com | Forwarder | artur@ + info@ |
+| noreply@camel-global.com | Forwarder | info@ + artur@ |
 | email@camel-global.com | Forwarder | nicktrin@gmail.com + artur@ |
 
 ## Stable Tags
@@ -360,6 +421,7 @@ Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert
 | v-stable-chat45-email-locale | Chat 45 complete — all emails locale-aware |
 | v-stable-chat46-complete | Chat 46 complete — driver steps enforced EN/ES, chat widget full EN/ES |
 | v-stable-chat47-complete | Chat 47 complete — outreach improvements |
+| v-stable-chat48-complete | Chat 48 complete — GA tracking, payout hold dispute system, Stripe live setup |
 
 ### Customer (~/camel-customer)
 | Tag | Description |
@@ -372,7 +434,7 @@ Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert
 
 ## Rollback
 ```bash
-cd ~/camel-portal && git checkout v-stable-chat47-complete
+cd ~/camel-portal && git checkout v-stable-chat48-complete
 cd ~/camel-customer && git checkout v-stable-chat46-complete
 ```
 
@@ -397,18 +459,26 @@ Completion statement PDF + booking receipt PDF
 Live status system — 7 checks
 Partner onboarding — 7 steps
 Commission invoices — auto-generated monthly
-Partner terms — single source of truth lib/portal/partnerTerms.ts version 2026-06b
-Security — CSP, Stripe Radar, 2FA all done
-Partner outreach — AI-powered, country filter, batch send, send again, unsubscribe, language by country, hardcoded email body, white logo, founding partner messaging
+Partner terms — single source of truth lib/portal/partnerTerms.ts version 2026-06c (includes chargeback clause)
+Operating rules — includes chargeback/dispute payout hold clause EN+ES
+Security — CSP, Stripe Radar, 2FA, Domain Guard all done
+Partner outreach — country filter, batch send, send again, unsubscribe, language by country, hardcoded email body, white logo, founding partner messaging, noreply@ sender, UTM tracking
+GA tracking — outreach UTM params, CTA click events, partner signup complete event
+Payout hold / dispute system — admin can hold/release per booking, cron skips held bookings, disputed status shown everywhere, all CSVs updated, financial dashboard disputed card
+Stripe live — NTUK Ltd limited company account, marketplace model, live keys in Vercel, webhook configured
+Portal homepage — customer site section linking to camel-global.com, footer logo mobile fix, heading full stops removed
 
 
-## What Needs Building — Next Chat (Chat 48)
+## What Needs Building — Next Chat (Chat 49)
+🔲 Go live — camel-global.com coming soon page needs removing / redirecting to live customer site
+🔲 First real partner onboarding in live Stripe Connect mode
+🔲 Live end-to-end test booking with real card
+
 🔲 Lower priority (deferred)
-
 Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
 Xero monthly commission endpoint
 DAC7 EU platform reporting
-Outreach: set up e.camel-global.com subdomain in Resend for better domain protection
+Outreach: set up e.camel-global.com subdomain in Resend for better domain protection (needs Resend plan upgrade)
 
 ❌ Phase 6 — Future languages (Future)
 IT, PT, FR, DE — copy en.json to new locale file in both repos, translate values, add locale to LanguageContext.tsx (one line each repo). Also update email templates in both lib/email.ts files.
@@ -419,47 +489,50 @@ Note: camel-coming-soon is a git submodule inside camel-portal. Always shows as 
 
 ## Session Log
 
+### Chat 48 (Completed)
+GA tracking, payout hold dispute system, Stripe live setup, portal homepage improvements
+
+GA tracking for outreach emails (camel-portal):
+- UTM params added to all outreach email links (signup button + unsubscribe) — utm_source, utm_medium, utm_campaign, utm_content, utm_term (country), ref (prospect_id)
+- outreach_cta_click GA event on portal homepage CTA buttons (hero, apply, final-cta) — fires only when utm_source=outreach
+- partner_signup_complete GA event on application-submitted page when status=pending — passes utm params
+- Files: app/api/admin/outreach/send/route.ts, app/HomePageContent.tsx, app/partner/application-submitted/page.tsx
+
+Portal homepage improvements (camel-portal):
+- Customer site section added above final CTA — links to camel-global.com with orange border-t, translated EN/ES
+- Footer logo mobile stretch fixed — wrapped in w-40 shrink-0 div
+- All heading full stops removed (EN+ES i18n strings)
+- Hero section mobile gap reduced — py-12 sm:py-24
+- Outreach from address changed to noreply@camel-global.com
+
+Payout Hold / Dispute system (camel-portal):
+- DB migration: ALTER TABLE partner_bookings ADD COLUMN payout_hold boolean DEFAULT false, ADD COLUMN payout_hold_reason text
+- Admin booking detail — Payout Hold card with hold/release button and reason field; amber banner at top when held
+- Admin booking detail — partner email now fetched from partner_applications.email (not partner_profiles)
+- Admin bookings list — "Disputed" amber status pill when payout_hold=true; "Disputed" filter option
+- Admin reports — "Disputed" status pill in all tables; "On Hold" payout status; Disputed card in financial dashboard per currency; "Disputed" filter; both CSV sheets have Booking Status + Payout Status columns
+- Partner booking detail — amber "Payment Disputed" banner (EN/ES) — no reason shown
+- Partner bookings list — "Disputed" amber status pill
+- Partner reports — "Disputed" amber pill; "Disputed" filter (translated EN/ES via i18n); Disputed summary card per currency (translated); both status and payout status in CSV show Disputed/On Hold
+- Monthly cron — skips bookings where payout_hold=true
+- New i18n keys: bookings.detail.hold.title, bookings.detail.hold.body, reports.summary.disputed, reports.filter.disputed (EN+ES)
+
+Partner terms & operating rules (camel-portal):
+- partnerTerms.ts version bumped to 2026-06c effective 10 June 2026
+- Chargeback/dispute payout hold clause added to clause 7 (EN)
+- operatingRules.ts section 9 — chargeback clause added (EN + ES)
+
+Stripe live setup:
+- New NTUK Ltd Stripe account created as Limited Company (old account was sole trader — do not use)
+- Business model: Marketplace
+- Live API keys updated in both Vercel projects
+- Webhook endpoint created for live: https://www.camel-global.com/api/webhooks/stripe — payment_intent.succeeded
+- Stripe Radar enabled on new account
+
+Stable tag: v-stable-chat48-complete on camel-portal
+
 ### Chat 47 (Completed)
 Partner outreach improvements
-
-Outreach page (app/admin/outreach/page.tsx):
-- Added country filter — fixed list: Spain, France, Italy, Portugal, Germany, UK, USA
-- Added Send Again button on all non-unsubscribed rows (manual only, not included in batch)
-- Batch send respects active country filter
-- Unsubscribed rows shown with "unsub" badge, greyed out, no send buttons
-
-Outreach send route (app/api/admin/outreach/send/route.ts):
-- From address changed to partners@camel-global.com
-- Email body fully hardcoded — no AI. Opening line personalised with contact first name and city.
-- Language by country: Spain → Spanish, all others → English
-- Subject EN: Camel Global - Meet & Greet Car Hire - Founding Partner Invitation
-- Subject ES: Camel Global - Meet & Greet Alquiler de Coches - Invitación a Socio Fundador  
-- Founding partner messaging — limited places, free, 5 minutes
-- Orange SIGN UP NOW button linking to https://portal.camel-global.com/
-- List-Unsubscribe header on every email
-- Unsubscribed prospects blocked even on resend
-- Removed branding line from footer
-- Resend (Send Again) allowed on any non-unsubscribed prospect, counts towards daily limit
-
-Unsubscribe route (app/api/admin/outreach/unsubscribe/route.ts) — NEW FILE:
-- Public GET endpoint, no auth
-- Sets unsubscribed=true on prospect
-- Redirects to https://portal.camel-global.com/?unsubscribed=true
-
-Portal homepage (app/HomePageContent.tsx):
-- Shows green unsubscribed banner when ?unsubscribed=true in URL
-
-lib/email.ts:
-- Added optional `from` and `headers` params to sendEmail() — all existing calls unaffected
-
-White logo (public/camel-logo-white-new.png) — NEW FILE:
-- camel-logo.png has yellow/gold pixels (247,209,77) — CSS filter invert makes them blue in email clients
-- Generated with Python/Pillow replacing all visible pixels with white
-- Used in outreach email header at 108px height on black background
-
-DB migration run in Chat 47:
-- ALTER TABLE outreach_prospects ADD COLUMN IF NOT EXISTS unsubscribed boolean DEFAULT false;
-
 Stable tag: v-stable-chat47-complete on camel-portal
 
 ### Chat 46 (Completed)
@@ -524,4 +597,4 @@ grep -n "new text" ~/camel-portal/path/to/file.ts
 git add path/to/file.ts && git commit -m "message" && git push origin main
 ```
 
-Last updated: Chat 47 complete — partner outreach improvements: country filter, Send Again, hardcoded email body, founding partner messaging, white logo, unsubscribe system, language by country.
+Last updated: Chat 48 complete — GA outreach tracking, payout hold dispute system, Stripe live NTUK Ltd account, portal homepage improvements, partner terms v2026-06c with chargeback clause.
