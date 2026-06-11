@@ -165,6 +165,7 @@
   "signup.signIn": "Sign in",
 
   "reset.title": "Reset Password",
+  "reset.subtitle": "Choose a new password for your account.",
   "reset.email": "Email address",
   "reset.submit": "Send Reset Link",
   "reset.sent": "Check your email for a reset link.",
@@ -438,5 +439,19 @@
   "sport.bikes1": "Bikes — 1",
   "sport.bikes2": "Bikes — 2",
   "sport.bikes3": "Bikes — 3+",
-  "sport.other": "Other large equipment"
+  "sport.other": "Other large equipment",
+"chat.suggestions.0": "Where is my driver?",
+"chat.suggestions.1": "What is my booking status?",
+"chat.suggestions.2": "How does the fuel deposit work?",
+"chat.suggestions.3": "How do I cancel a booking?",
+"chat.welcome": "👋 Hi! I'm Camel Help. I can answer questions about your bookings, driver details, fuel deposits, and more. How can I help?",
+"chat.endChat": "End chat",
+"chat.sendingTranscript": "Sending transcript…",
+"chat.ended.transcript": "✅ Chat ended. A transcript has been emailed to you.",
+"chat.ended.noTranscript": "Chat ended.",
+"chat.startNew": "Start new chat",
+"chat.subtitle": "AI assistant · usually instant",
+"chat.placeholder": "Type a message…",
+"chat.error.failed": "Failed to get a response.",
+"chat.error.generic": "Something went wrong. Please try again."
 }

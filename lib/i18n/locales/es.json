@@ -165,6 +165,7 @@
   "signup.signIn": "Inicia sesión",
 
   "reset.title": "Restablecer contraseña",
+  "reset.subtitle": "Elige una nueva contraseña para tu cuenta.",
   "reset.email": "Correo electrónico",
   "reset.submit": "Enviar enlace de restablecimiento",
   "reset.sent": "Revisa tu correo para el enlace de restablecimiento.",
@@ -438,5 +439,19 @@
   "sport.bikes1": "Bicis — 1",
   "sport.bikes2": "Bicis — 2",
   "sport.bikes3": "Bicis — 3+",
-  "sport.other": "Otro equipamiento voluminoso"
+  "sport.other": "Otro equipamiento voluminoso",
+"chat.suggestions.0": "¿Dónde está mi conductor?",
+"chat.suggestions.1": "¿Cuál es el estado de mi reserva?",
+"chat.suggestions.2": "¿Cómo funciona el depósito de combustible?",
+"chat.suggestions.3": "¿Cómo cancelo una reserva?",
+"chat.welcome": "👋 ¡Hola! Soy Camel Help. Puedo responder preguntas sobre tus reservas, detalles del conductor, depósitos de combustible y más. ¿En qué puedo ayudarte?",
+"chat.endChat": "Finalizar chat",
+"chat.sendingTranscript": "Enviando transcripción…",
+"chat.ended.transcript": "✅ Chat finalizado. Se te ha enviado una transcripción por correo.",
+"chat.ended.noTranscript": "Chat finalizado.",
+"chat.startNew": "Nuevo chat",
+"chat.subtitle": "Asistente IA · normalmente instantáneo",
+"chat.placeholder": "Escribe un mensaje…",
+"chat.error.failed": "No se pudo obtener una respuesta.",
+"chat.error.generic": "Algo salió mal. Por favor, inténtalo de nuevo."
 }

@@ -57,6 +57,7 @@ function ResetPasswordInner() {
       const { error } = await authClient.auth.updateUser({ password });
       if (error) throw error;
       setSuccess(true);
+      await authClient.auth.signOut();
       setTimeout(() => router.replace("/login"), 2500);
     } catch (e: any) {
       setError(e?.message || "Failed to update password.");
