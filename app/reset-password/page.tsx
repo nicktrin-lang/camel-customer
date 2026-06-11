@@ -23,6 +23,7 @@ function ResetPasswordInner() {
   const [success,      setSuccess]      = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionError, setSessionError] = useState("");
+  const [resetTokens, setResetTokens]   = useState<{ at: string; rt: string } | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -34,9 +35,8 @@ function ResetPasswordInner() {
 
       if (errorCode) { setSessionError("This reset link has expired or is invalid. Please request a new one."); return; }
       if (at && rt) {
-        const { error } = await authClient.auth.setSession({ access_token: at, refresh_token: rt });
-        if (error) setSessionError("This reset link has expired or is invalid.");
-        else setSessionReady(true);
+        setResetTokens({ at, rt });
+        setSessionReady(true);
         return;
       }
       const { data } = await authClient.auth.getSession();
@@ -54,10 +54,14 @@ function ResetPasswordInner() {
     if (password.length < 8)  { setError("Password must be at least 8 characters."); return; }
     setLoading(true); setError("");
     try {
+      if (resetTokens) {
+        const { error: sessErr } = await authClient.auth.setSession({ access_token: resetTokens.at, refresh_token: resetTokens.rt });
+        if (sessErr) throw new Error("Reset link expired. Please request a new one.");
+      }
       const { error } = await authClient.auth.updateUser({ password });
       if (error) throw error;
-      setSuccess(true);
       await authClient.auth.signOut();
+      setSuccess(true);
       setTimeout(() => router.replace("/login"), 2500);
     } catch (e: any) {
       setError(e?.message || "Failed to update password.");
