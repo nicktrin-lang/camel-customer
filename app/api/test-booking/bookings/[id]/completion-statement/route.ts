@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
+import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { generateCompletionStatementPDF } from "@/lib/portal/generateCompletionStatementPDF";
 
 const BUCKET            = "booking-receipts";
@@ -31,7 +32,8 @@ export async function GET(
   const token = getBearerToken(req);
   if (!token) return NextResponse.json({ error: "Unauthorised — no token" }, { status: 401 });
 
-  const db = createCustomerServiceRoleSupabaseClient();
+  const db         = createCustomerServiceRoleSupabaseClient();
+  const portalDb   = createServiceRoleSupabaseClient();
 
   const { data: authData, error: authErr } = await db.auth.getUser(token);
   if (authErr || !authData?.user) {
@@ -46,6 +48,7 @@ export async function GET(
       booking_status, currency,
       car_hire_price, fuel_price, amount,
       fuel_used_quarters, fuel_charge, fuel_refund,
+      post_completion_refund_total,
       collection_fuel_level_partner, collection_fuel_level_driver,
       return_fuel_level_partner, return_fuel_level_driver
     `)
@@ -77,11 +80,26 @@ export async function GET(
     .eq("user_id", bk.partner_user_id)
     .maybeSingle();
 
+  // ── Fetch post-completion refunds from portal DB ───────────────────────────
+  const { data: refundRows } = await portalDb
+    .from("partner_booking_refunds")
+    .select("id, amount, reason, stripe_refund_id, created_at")
+    .eq("booking_id", bookingId)
+    .order("created_at", { ascending: true });
+
+  const postCompletionRefunds = (refundRows ?? []).map((r: any) => ({
+    id:               r.id,
+    amount:           Number(r.amount),
+    reason:           r.reason ?? null,
+    stripe_refund_id: r.stripe_refund_id ?? null,
+    created_at:       r.created_at,
+  }));
+
   const currency    = (bk.currency || "EUR").toUpperCase();
   const ref         = bk.job_number ?? bookingId.slice(0, 8);
-  const storagePath = `${bk.request_id}/completion-statement-${ref}.pdf`;
+  const isAmended   = postCompletionRefunds.length > 0;
+  const storagePath = `${bk.request_id}/completion-statement-${ref}${isAmended ? "-amended" : ""}.pdf`;
 
-  // Always regenerate — don't serve cached version as it may be stale
   const collectionFuel =
     normalizeFuel(bk.collection_fuel_level_partner) ||
     normalizeFuel(bk.collection_fuel_level_driver);
@@ -91,26 +109,27 @@ export async function GET(
 
   try {
     const pdfBuffer = await generateCompletionStatementPDF({
-      jobNumber:       bk.job_number,
+      jobNumber:            bk.job_number,
       bookingId,
-      customerName:    null,
-      pickupAddress:   cr.pickup_address    || null,
-      dropoffAddress:  cr.dropoff_address   || null,
-      pickupAt:        cr.pickup_at         || null,
-      dropoffAt:       cr.dropoff_at        || null,
-      durationMinutes: cr.journey_duration_minutes || null,
-      vehicleCategory: cr.vehicle_category_name || null,
-      companyName:     profile?.company_name || null,
+      customerName:         null,
+      pickupAddress:        cr.pickup_address    || null,
+      dropoffAddress:       cr.dropoff_address   || null,
+      pickupAt:             cr.pickup_at         || null,
+      dropoffAt:            cr.dropoff_at        || null,
+      durationMinutes:      cr.journey_duration_minutes || null,
+      vehicleCategory:      cr.vehicle_category_name || null,
+      companyName:          profile?.company_name || null,
       currency,
-      carHire:         Number(bk.car_hire_price || 0),
-      fuelDeposit:     Number(bk.fuel_price || 0),
-      totalPaid:       Number(bk.amount || 0),
+      carHire:              Number(bk.car_hire_price || 0),
+      fuelDeposit:          Number(bk.fuel_price || 0),
+      totalPaid:            Number(bk.amount || 0),
       collectionFuel,
       returnFuel,
-      usedQuarters:    bk.fuel_used_quarters ?? 0,
-      fuelCharge:      Number(bk.fuel_charge || 0),
-      fuelRefund:      Number(bk.fuel_refund || 0),
-      issuedAt:        new Date().toISOString(),
+      usedQuarters:         bk.fuel_used_quarters ?? 0,
+      fuelCharge:           Number(bk.fuel_charge || 0),
+      fuelRefund:           Number(bk.fuel_refund || 0),
+      issuedAt:             new Date().toISOString(),
+      postCompletionRefunds,
     });
 
     const { error: uploadErr } = await db.storage

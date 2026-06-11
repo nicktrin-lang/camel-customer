@@ -128,6 +128,7 @@ export async function GET(
           driver_vehicle, driver_notes, driver_assigned_at,
           currency, charge_currency, fuel_price, car_hire_price,
           fuel_used_quarters, fuel_charge, fuel_refund,
+          post_completion_refund_total,
           collection_confirmed_by_driver, collection_confirmed_by_driver_at, collection_fuel_level_driver,
           return_confirmed_by_driver, return_confirmed_by_driver_at, return_fuel_level_driver,
           collection_confirmed_by_partner, collection_confirmed_by_partner_at, collection_fuel_level_partner, collection_partner_notes,
@@ -154,6 +155,21 @@ export async function GET(
           .eq("booking_id", bk.id)
           .maybeSingle();
 
+        // ── Fetch post-completion refunds ──────────────────────────────────
+        const { data: refundRows } = await db
+          .from("partner_booking_refunds")
+          .select("id, amount, reason, stripe_refund_id, created_at")
+          .eq("booking_id", bk.id)
+          .order("created_at", { ascending: true });
+
+        const postCompletionRefunds = (refundRows ?? []).map((r: any) => ({
+          id:               r.id,
+          amount:           Number(r.amount),
+          reason:           r.reason ?? null,
+          stripe_refund_id: r.stripe_refund_id ?? null,
+          created_at:       r.created_at,
+        }));
+
         booking = {
           id: bk.id,
           request_id: bk.request_id,
@@ -179,6 +195,8 @@ export async function GET(
           fuel_used_quarters: bk.fuel_used_quarters ?? null,
           fuel_charge: bk.fuel_charge ?? null,
           fuel_refund: bk.fuel_refund ?? null,
+          post_completion_refund_total: Number(bk.post_completion_refund_total ?? 0),
+          postCompletionRefunds,
           collection_confirmed_by_driver: !!bk.collection_confirmed_by_driver,
           collection_confirmed_by_driver_at: bk.collection_confirmed_by_driver_at || null,
           collection_fuel_level_driver: bk.collection_fuel_level_driver || null,
@@ -211,7 +229,6 @@ export async function GET(
           refund_status: bk.refund_status || null,
           has_review: !!existingReview,
           existing_review: existingReview || null,
-          // Pass through bid terms to confirmed booking
           mileage_limit: acceptedBid.mileage_limit || null,
           security_deposit_notes: acceptedBid.security_deposit_notes || null,
         };

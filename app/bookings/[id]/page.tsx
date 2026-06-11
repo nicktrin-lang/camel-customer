@@ -34,6 +34,11 @@ type ExistingReview = {
   id: string; rating: number; comment: string|null;
   partner_reply: string|null; partner_replied_at: string|null; created_at: string;
 };
+type PostCompletionRefund = {
+  id: string; amount: number; reason: string | null;
+  stripe_refund_id: string | null; created_at: string;
+};
+
 type BookingData = {
   id: string; request_id: string; partner_user_id: string; winning_bid_id: string;
   booking_status: string; amount: number|null; notes: string|null;
@@ -61,6 +66,8 @@ type BookingData = {
   insurance_docs_confirmed_by_driver: boolean; insurance_docs_confirmed_by_driver_at: string|null;
   insurance_docs_confirmed_by_customer: boolean; insurance_docs_confirmed_by_customer_at: string|null;
   has_review: boolean; existing_review: ExistingReview|null;
+  post_completion_refund_total?: number|null;
+  postCompletionRefunds?: PostCompletionRefund[];
   mileage_limit: string|null;
   security_deposit_amount: number|null;
   security_deposit_notes: string|null;
@@ -282,6 +289,29 @@ function BookingSummaryCard({ bk, accessToken }: { bk: BookingData; accessToken:
           <div className="bg-green-500/20 border border-green-400/40 p-4"><p className="text-xs font-black text-white/70 uppercase tracking-wide mb-2">{t("booking.summary.refund")}</p><p className="text-2xl font-black text-white">{fuelRefund!=null?fmt2(fuelRefund):"—"}</p></div>
         </div>
       </div>
+      {(bk.postCompletionRefunds ?? []).length > 0 && (
+        <div className="bg-amber-50 border-t-2 border-amber-300 p-6">
+          <p className="text-xs font-black uppercase tracking-widest text-amber-700 mb-3">Post-Completion Adjustments</p>
+          {(bk.postCompletionRefunds ?? []).map((r, i) => (
+            <div key={r.id} className="flex items-start justify-between py-2 border-b border-amber-100 last:border-0">
+              <span className="text-sm font-semibold text-amber-800">
+                Refund {i + 1}{r.reason ? ` — ${r.reason}` : ""}
+                <span className="ml-2 text-xs text-amber-600">{new Date(r.created_at).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}</span>
+              </span>
+              <span className="text-sm font-black text-amber-700 ml-4 shrink-0">− {fmt2(r.amount)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between pt-3 mt-1 border-t-2 border-amber-300">
+            <span className="text-sm font-black text-amber-800">Total refunded</span>
+            <span className="text-sm font-black text-amber-700">− {fmt2(Number(bk.post_completion_refund_total ?? 0))}</span>
+          </div>
+          <div className="flex justify-between pt-2">
+            <span className="text-sm font-black text-black">Net amount after adjustments</span>
+            <span className="text-sm font-black text-black">{fmt2((Number(bk.car_hire_price||0) + Number(bk.fuel_charge||0)) - Number(bk.post_completion_refund_total ?? 0))}</span>
+          </div>
+          <p className="mt-3 text-xs font-semibold text-amber-600">Refunds issued to your original payment method. Please allow 5–10 business days to appear. Download your amended statement below.</p>
+        </div>
+      )}
       <div className="bg-white p-6">
         <p className="text-xs font-black uppercase tracking-widest text-black mb-4">{t("booking.summary.documents")}</p>
         <CompletionStatementButton bookingId={bk.id} accessToken={accessToken} />
