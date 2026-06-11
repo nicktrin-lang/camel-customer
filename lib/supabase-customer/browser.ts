@@ -7,7 +7,7 @@ export function createCustomerBrowserClient() {
   return createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: {
       flowType: "implicit",
-      detectSessionInUrl: true,
+      detectSessionInUrl: false,
       persistSession: true,
       storage: typeof window !== "undefined" ? window.localStorage : undefined,
     },
