@@ -92,8 +92,8 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
         String(data?.user?.user_metadata?.full_name || "").trim() ||
         String(data?.user?.email || "").split("@")[0] || ""
       );
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_e: any, session: any) => {
-        if (mounted) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event: any, session: any) => {
+        if (mounted && event !== "PASSWORD_RECOVERY") {
           setIsCustomerLoggedIn(!!session?.user);
           setCustomerName(
             String(session?.user?.user_metadata?.full_name || "").trim() ||
