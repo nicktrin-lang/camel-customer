@@ -27,6 +27,9 @@ function ResetPasswordInner() {
 
   useEffect(() => {
     async function init() {
+      // Sign out any existing session immediately — reset page should never show logged-in state
+      await authClient.auth.signOut({ scope: "local" });
+
       const hash      = window.location.hash.substring(1);
       const params    = new URLSearchParams(hash);
       const at        = params.get("access_token");
