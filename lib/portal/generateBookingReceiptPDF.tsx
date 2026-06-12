@@ -53,6 +53,10 @@ const s = StyleSheet.create({
   depositBox:   { backgroundColor: "#fffbeb", borderLeft: "3 solid #f59e0b", padding: "8 10", marginBottom: 6 },
   depositLabel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#b45309", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 },
   depositText:  { fontSize: 7.5, color: "#333", lineHeight: 1.4 },
+  // Platform intermediary notice
+  platformBox:  { backgroundColor: "#f5f5f5", borderLeft: "3 solid #999", padding: "8 10", marginBottom: 6, marginTop: 4 },
+  platformLabel:{ fontSize: 7, fontFamily: "Helvetica-Bold", color: "#555", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 3 },
+  platformText: { fontSize: 7.5, color: "#444", lineHeight: 1.5 },
   note:         { fontSize: 7.5, color: "#888", marginTop: 10, lineHeight: 1.5 },
   noteOrange:   { fontSize: 7.5, color: "#ff7a00", fontFamily: "Helvetica-Bold", marginTop: 6, lineHeight: 1.5 },
   footer:       { position: "absolute", bottom: 0, left: 0, right: 0, borderTop: "1 solid #e5e5e5", padding: "6 24", flexDirection: "row", justifyContent: "space-between" },
@@ -263,7 +267,7 @@ function ReceiptDocument({ d }: { d: ReceiptData }) {
 
           {/* Payment */}
           <View style={s.section}>
-            <Text style={s.sectionHead}>Payment Summary ({cur})</Text>
+            <Text style={s.sectionHead}>Payment to Camel Global ({cur})</Text>
             <View style={s.row}>
               <Text style={s.rowLabel}>Car hire</Text>
               <Text style={s.rowValue}>{fmtMoney(d.chargeCarHire, cur)}</Text>
@@ -273,9 +277,21 @@ function ReceiptDocument({ d }: { d: ReceiptData }) {
               <Text style={s.rowValue}>{fmtMoney(d.chargeFuel, cur)}</Text>
             </View>
             <View style={s.totalRow}>
-              <Text style={s.totalLabel}>Total paid</Text>
+              <Text style={s.totalLabel}>Total paid to Camel Global</Text>
               <Text style={s.totalValue}>{fmtMoney(d.chargeTotal, cur)}</Text>
             </View>
+          </View>
+
+          {/* Platform intermediary notice */}
+          <View style={s.platformBox}>
+            <Text style={s.platformLabel}>Platform Payment Notice</Text>
+            <Text style={s.platformText}>
+              This document confirms payment received by NTUK Ltd (trading as Camel Global) as a marketplace
+              intermediary and technology platform. It is not a VAT invoice for car hire services.
+              The car hire service is provided directly by {d.companyName || "the car hire company"}, who is the
+              supplier of those services. If you require a VAT invoice for the car hire, please request one
+              directly from {d.companyName || "the car hire company"}.
+            </Text>
           </View>
 
           {/* Additional terms */}
@@ -455,6 +471,19 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
   const subjectEN = `Booking Confirmation Receipt ${jobNo} — Camel Global`;
   const subjectES = `Recibo de confirmación de reserva ${jobNo} — Camel Global`;
 
+  // Platform notice shown in email body
+  const platformNoticeEN = `
+    <div style="background:#f5f5f5;border-left:3px solid #999;padding:10px 14px;margin:16px 0;font-size:12px;color:#555;line-height:1.5;">
+      <strong style="display:block;margin-bottom:4px;color:#333;">Platform Payment Notice</strong>
+      This email and the attached PDF confirm payment received by NTUK Ltd (trading as Camel Global) as a marketplace intermediary. They are not a VAT invoice for car hire services. The car hire service is provided directly by <strong>${companyName}</strong>. If you require a VAT invoice, please request one directly from ${companyName}.
+    </div>`;
+
+  const platformNoticeES = `
+    <div style="background:#f5f5f5;border-left:3px solid #999;padding:10px 14px;margin:16px 0;font-size:12px;color:#555;line-height:1.5;">
+      <strong style="display:block;margin-bottom:4px;color:#333;">Aviso de pago de plataforma</strong>
+      Este correo y el PDF adjunto confirman el pago recibido por NTUK Ltd (que opera como Camel Global) como intermediario de la plataforma. No constituyen una factura de IVA por servicios de alquiler de vehículos. El servicio de alquiler es prestado directamente por <strong>${companyName}</strong>. Si necesitas una factura de IVA, solicítala directamente a ${companyName}.
+    </div>`;
+
   const htmlEN = `
     <div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
       <div style="background:#000;padding:20px 28px;">
@@ -475,6 +504,7 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
             </tr>
           </table>
         </div>
+        ${platformNoticeEN}
         <p style="font-size:13px;color:#666;">Your receipt is attached as a PDF. You can also download it any time from your booking page at <a href="https://camel-global.com/bookings/${params.requestId}" style="color:#ff7a00;">camel-global.com</a>.</p>
         <p style="font-size:13px;color:#333;font-weight:700;border-left:4px solid #ff7a00;padding-left:12px;margin:16px 0;">What to bring when collecting your car:</p>
         <ul style="font-size:13px;color:#333;margin:0 0 16px;padding-left:20px;line-height:1.8;">
@@ -507,6 +537,7 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
             </tr>
           </table>
         </div>
+        ${platformNoticeES}
         <p style="font-size:13px;color:#666;">Tu recibo está adjunto en PDF. También puedes descargarlo en cualquier momento desde tu página de reserva en <a href="https://camel-global.com/bookings/${params.requestId}" style="color:#ff7a00;">camel-global.com</a>.</p>
         <p style="font-size:13px;color:#333;font-weight:700;border-left:4px solid #ff7a00;padding-left:12px;margin:16px 0;">Qué traer al recoger tu coche:</p>
         <ul style="font-size:13px;color:#333;margin:0 0 16px;padding-left:20px;line-height:1.8;">

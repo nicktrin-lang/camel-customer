@@ -227,6 +227,31 @@ export default function CustomerTermsPage() {
           </div>
 
           <div>
+            <h2 className="text-2xl font-black text-black mb-3">10b. Booking receipt and VAT invoices</h2>
+            <div className="bg-[#f0f0f0] px-5 py-4 mb-4">
+              <p className="text-base font-black text-black">
+                The booking confirmation receipt issued by Camel Global is not a VAT invoice for car hire services.
+              </p>
+            </div>
+            <p className="text-base font-semibold mb-3">
+              When you make a payment through the Camel Global platform, you will receive a booking confirmation
+              receipt issued by NTUK Ltd (trading as Camel Global). This document confirms that Camel Global
+              has received your payment as a marketplace intermediary — it is a platform payment receipt, not
+              a VAT invoice for the car hire service itself.
+            </p>
+            <p className="text-base font-semibold mb-3">
+              The car hire service is provided directly by the partner (the independent car hire company named
+              on your booking). The partner is the supplier of that service for tax and invoicing purposes.
+              If you require a VAT invoice for the car hire — for example for business expense purposes —
+              you must request one directly from the car hire company.
+            </p>
+            <p className="text-base font-semibold">
+              Camel Global is not responsible for issuing VAT invoices for car hire services and cannot
+              do so on behalf of any partner.
+            </p>
+          </div>
+
+          <div>
             <h2 className="text-2xl font-black text-black mb-3">11. Cancellations and refunds</h2>
 
             <div className="bg-[#f0f0f0] px-5 py-4 mb-5">
@@ -309,6 +334,7 @@ export default function CustomerTermsPage() {
               <li>Incidents, accidents, damage, or loss during the hire period</li>
               <li>Charges payable directly to the partner (security deposits, young driver surcharges, excess mileage)</li>
               <li>Delays caused by circumstances outside our control</li>
+              <li>Issuing VAT invoices for car hire services — these are the responsibility of the car hire company</li>
             </ul>
             <p className="text-base font-semibold">
               Nothing in these terms limits our liability for death or personal injury caused by our
