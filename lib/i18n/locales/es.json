@@ -453,5 +453,12 @@
 "chat.subtitle": "Asistente IA · normalmente instantáneo",
 "chat.placeholder": "Escribe un mensaje…",
 "chat.error.failed": "No se pudo obtener una respuesta.",
-"chat.error.generic": "Algo salió mal. Por favor, inténtalo de nuevo."
+"chat.error.generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
+"account.vatDetails.title": "Datos para Factura",
+"account.vatDetails.subtitle": "Solo necesarios si vas a solicitar una factura de IVA a la empresa de alquiler de vehículos. Estos datos se compartirán con el socio en tu reserva para que pueda emitirte una factura directamente.",
+"account.vatDetails.billingAddress": "Dirección de facturación",
+"account.vatDetails.billingAddressPlaceholder": "Tu dirección de facturación completa",
+"account.vatDetails.taxId": "NIF / Número de IVA",
+"account.vatDetails.taxIdPlaceholder": "p. ej. ES-B12345678, GB123456789",
+"account.vatDetails.taxIdNote": "Introduce tu número de IVA, NIF, o equivalente fiscal de tu país. Déjalo en blanco si no procede."
 }

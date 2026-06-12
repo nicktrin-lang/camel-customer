@@ -453,5 +453,12 @@
 "chat.subtitle": "AI assistant · usually instant",
 "chat.placeholder": "Type a message…",
 "chat.error.failed": "Failed to get a response.",
-"chat.error.generic": "Something went wrong. Please try again."
+"chat.error.generic": "Something went wrong. Please try again.",
+"account.vatDetails.title": "VAT Invoice Details",
+"account.vatDetails.subtitle": "Only needed if you plan to request a VAT invoice from a car hire company for a booking. These details will be shared with the partner on your booking so they can issue an invoice directly to you.",
+"account.vatDetails.billingAddress": "Billing address",
+"account.vatDetails.billingAddressPlaceholder": "Your full billing address",
+"account.vatDetails.taxId": "Tax ID / VAT number",
+"account.vatDetails.taxIdPlaceholder": "e.g. GB123456789, ES-B12345678, EIN 12-3456789",
+"account.vatDetails.taxIdNote": "Enter your VAT number, NIF, EIN, or equivalent tax identifier for your country. Leave blank if not applicable."
 }

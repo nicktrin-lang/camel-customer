@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     const db = createServiceRoleSupabaseClient();
     const { data, error } = await db
       .from("customer_profiles")
-      .select("full_name, phone, communication_locale")
+      .select("full_name, phone, communication_locale, billing_address, tax_id")
       .eq("user_id", user.id)
       .single();
 
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { user_id, full_name, phone, communication_locale } = body;
+    const { user_id, full_name, phone, communication_locale, billing_address, tax_id } = body;
 
     if (!user_id) {
       return NextResponse.json({ error: "user_id is required" }, { status: 400 });
@@ -47,9 +47,11 @@ export async function POST(req: Request) {
 
     // Only include fields that were explicitly sent — never overwrite with undefined
     const upsertData: Record<string, unknown> = { user_id };
-    if (full_name !== undefined)       upsertData.full_name = full_name ?? null;
-    if (phone !== undefined)           upsertData.phone = phone ?? null;
-    if (communication_locale !== undefined) upsertData.communication_locale = communication_locale;
+    if (full_name             !== undefined) upsertData.full_name             = full_name ?? null;
+    if (phone                 !== undefined) upsertData.phone                 = phone ?? null;
+    if (communication_locale  !== undefined) upsertData.communication_locale  = communication_locale;
+    if (billing_address       !== undefined) upsertData.billing_address       = billing_address ?? null;
+    if (tax_id                !== undefined) upsertData.tax_id                = tax_id ?? null;
 
     const { error } = await db
       .from("customer_profiles")

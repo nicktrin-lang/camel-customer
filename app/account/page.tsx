@@ -14,21 +14,26 @@ export default function AccountPage() {
   const router   = useRouter();
   const { t }    = useTranslation();
 
-  const [loading,       setLoading]       = useState(true);
-  const [saving,        setSaving]        = useState(false);
-  const [saved,         setSaved]         = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
-  const [fullName,      setFullName]      = useState("");
-  const [phone,         setPhone]         = useState("");
-  const [email,         setEmail]         = useState("");
-  const [userId,        setUserId]        = useState("");
-  const [confirmText,   setConfirmText]   = useState("");
-  const [showConfirm,   setShowConfirm]   = useState(false);
-  const [deleting,      setDeleting]      = useState(false);
-  const [deleteError,   setDeleteError]   = useState<string | null>(null);
-  const [emailLang,     setEmailLang]     = useState<"en" | "es">("en");
-  const [langSaving,    setLangSaving]    = useState(false);
-  const [langSaved,     setLangSaved]     = useState(false);
+  const [loading,         setLoading]         = useState(true);
+  const [saving,          setSaving]          = useState(false);
+  const [saved,           setSaved]           = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+  const [fullName,        setFullName]        = useState("");
+  const [phone,           setPhone]           = useState("");
+  const [email,           setEmail]           = useState("");
+  const [userId,          setUserId]          = useState("");
+  const [confirmText,     setConfirmText]     = useState("");
+  const [showConfirm,     setShowConfirm]     = useState(false);
+  const [deleting,        setDeleting]        = useState(false);
+  const [deleteError,     setDeleteError]     = useState<string | null>(null);
+  const [emailLang,       setEmailLang]       = useState<"en" | "es">("en");
+  const [langSaving,      setLangSaving]      = useState(false);
+  const [langSaved,       setLangSaved]       = useState(false);
+  const [billingAddress,  setBillingAddress]  = useState("");
+  const [taxId,           setTaxId]           = useState("");
+  const [vatSaving,       setVatSaving]       = useState(false);
+  const [vatSaved,        setVatSaved]        = useState(false);
+  const [vatError,        setVatError]        = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -49,6 +54,8 @@ export default function AccountPage() {
           if (json?.full_name)            setFullName(json.full_name);
           if (json?.phone)                setPhone(json.phone);
           if (json?.communication_locale) setEmailLang(json.communication_locale);
+          if (json?.billing_address)      setBillingAddress(json.billing_address);
+          if (json?.tax_id)               setTaxId(json.tax_id);
         }
       } catch {}
       setLoading(false);
@@ -72,7 +79,11 @@ export default function AccountPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ user_id: session.user.id, full_name: fullName.trim() || null, phone: phone.trim() || null }),
+        body: JSON.stringify({
+          user_id:  session.user.id,
+          full_name: fullName.trim() || null,
+          phone:     phone.trim() || null,
+        }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => null);
@@ -83,6 +94,37 @@ export default function AccountPage() {
       setError(e?.message || "Failed to save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleVatSave(e: React.FormEvent) {
+    e.preventDefault();
+    setVatSaving(true); setVatSaved(false); setVatError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      const res = await fetch("/api/test-booking/customer-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          user_id:         session.user.id,
+          billing_address: billingAddress.trim() || null,
+          tax_id:          taxId.trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || "Failed to save.");
+      }
+      setVatSaved(true);
+      setTimeout(() => setVatSaved(false), 3000);
+    } catch (e: any) {
+      setVatError(e?.message || "Failed to save.");
+    } finally {
+      setVatSaving(false);
     }
   }
 
@@ -177,6 +219,52 @@ export default function AccountPage() {
                 className="bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
                 {saving ? t("common.loading") : t("account.saveChanges")}
               </button>
+            </form>
+          </div>
+
+          {/* VAT invoice details */}
+          <div className="bg-white p-8">
+            <p className="text-xs font-black uppercase tracking-widest text-black/40 mb-2">
+              {t("account.vatDetails.title")}
+            </p>
+            <p className="text-sm font-semibold text-black/60 mb-5">
+              {t("account.vatDetails.subtitle")}
+            </p>
+
+            {vatError && (
+              <div className="mb-5 border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{vatError}</div>
+            )}
+
+            <form onSubmit={handleVatSave} className="space-y-4">
+              <div>
+                <label className={labelCls}>{t("account.vatDetails.billingAddress")}</label>
+                <textarea
+                  value={billingAddress}
+                  onChange={e => setBillingAddress(e.target.value)}
+                  rows={3}
+                  className="w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40 resize-none"
+                  placeholder={t("account.vatDetails.billingAddressPlaceholder")}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>{t("account.vatDetails.taxId")}</label>
+                <input
+                  value={taxId}
+                  onChange={e => setTaxId(e.target.value)}
+                  className={inputCls}
+                  placeholder={t("account.vatDetails.taxIdPlaceholder")}
+                />
+                <p className="mt-2 text-xs font-semibold text-black/30">
+                  {t("account.vatDetails.taxIdNote")}
+                </p>
+              </div>
+              <button type="submit" disabled={vatSaving}
+                className="bg-[#ff7a00] px-8 py-4 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
+                {vatSaving ? t("common.loading") : t("account.saveChanges")}
+              </button>
+              {vatSaved && (
+                <p className="text-sm font-semibold text-green-700">✓ {t("account.saved")}</p>
+              )}
             </form>
           </div>
 
