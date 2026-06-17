@@ -12,6 +12,80 @@ const db = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// ── GA4 Measurement Protocol ──────────────────────────────────────────────────
+const GA4_MEASUREMENT_ID  = "G-1Y758X38G4";
+const GA4_API_SECRET      = "m8xBZ_30QNqmKliAbvC04A";
+
+async function sendGA4PurchaseEvent({
+  bookingId,
+  jobNumber,
+  currency,
+  carHirePrice,
+  fuelPrice,
+  totalPrice,
+  commissionAmt,
+}: {
+  bookingId:     string;
+  jobNumber:     number | null;
+  currency:      string;
+  carHirePrice:  number;
+  fuelPrice:     number;
+  totalPrice:    number;
+  commissionAmt: number;
+}) {
+  try {
+    const payload = {
+      // client_id is required — use bookingId as a stable anonymous identifier
+      client_id: bookingId,
+      events: [{
+        name: "purchase",
+        params: {
+          transaction_id: jobNumber ? String(jobNumber) : bookingId,
+          value:          totalPrice,
+          currency,
+          // Camel's revenue (commission) — useful for GA revenue reporting
+          // GA4 uses 'value' as total, and we track commission separately as a custom param
+          camel_commission: commissionAmt,
+          items: [
+            {
+              item_id:   bookingId,
+              item_name: "Car Hire",
+              currency,
+              price:     carHirePrice,
+              quantity:  1,
+            },
+            {
+              item_id:   `${bookingId}_fuel`,
+              item_name: "Fuel Deposit",
+              currency,
+              price:     fuelPrice,
+              quantity:  1,
+            },
+          ],
+        },
+      }],
+    };
+
+    const res = await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      }
+    );
+
+    if (!res.ok) {
+      console.error(`GA4 purchase event failed: ${res.status} ${await res.text()}`);
+    } else {
+      console.log(`GA4 purchase event sent: booking ${bookingId}, value ${totalPrice} ${currency}`);
+    }
+  } catch (e: any) {
+    // Never let GA failure break the webhook
+    console.error("GA4 purchase event error:", e?.message);
+  }
+}
+
 async function getStripeFeeData(chargeId: string | null): Promise<{
   stripe_fee: number | null;
   stripe_fee_currency: string | null;
@@ -225,6 +299,18 @@ export async function POST(req: NextRequest) {
       }
 
       await syncBookingStatuses(bookingId);
+
+      // ── GA4 purchase event (Measurement Protocol) ─────────────────────────
+      // Fired server-side after booking is confirmed — tracks revenue per booking
+      await sendGA4PurchaseEvent({
+        bookingId,
+        jobNumber,
+        currency,
+        carHirePrice:  bidCarHire,
+        fuelPrice:     bidFuel,
+        totalPrice:    bidTotalPrice,
+        commissionAmt,
+      });
 
       const { data: partnerProfile } = await db
         .from("partner_profiles")
