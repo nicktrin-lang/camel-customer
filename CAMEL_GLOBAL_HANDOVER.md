@@ -12,7 +12,6 @@ Always give Claude the full file tree at the start of a new chat:
 Portal: find ~/camel-portal -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' | sort
 Customer: find ~/camel-customer -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.next/*' | sort
 
-
 Before any rewrite, Claude will tell you which files to paste, or give you a command to cat them.
 Always ask Claude to check the actual file before rewriting — never assume the artifact is current.
 Always provide the git push command at the end of every change.
@@ -97,8 +96,8 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | lib/i18n/LanguageContext.tsx | Language context + provider + localStorage + browser locale detection. Initialises as "en" then sets real locale in useEffect on mount. |
 | lib/i18n/useTranslation.ts | t() hook — dot-notation keys, {{var}} interpolation, English fallback. Returns { t, locale }. |
 | lib/i18n/LanguageToggle.tsx | EN \| ES toggle component — drop into any header. On mobile partner portal this is hidden from the topbar (hidden lg:flex) and rendered instead at the top of the sidebar drawer. |
-| lib/i18n/locales/en.json | English strings — all translated pages. Flat key-value format (e.g. "settings.language.label": "Language") — NOT nested objects. Includes bookings.table.col.refund, bookings.table.col.customerFinal, reports.bookings.col.refund, reports.bookings.col.customerFinal |
-| lib/i18n/locales/es.json | Spanish strings — same flat format. Includes translations for refund/customerFinal columns. |
+| lib/i18n/locales/en.json | English strings — all translated pages. Flat key-value format (e.g. "settings.language.label": "Language") — NOT nested objects. Includes bookings.table.col.refund, bookings.table.col.customerFinal, reports.bookings.col.refund, reports.bookings.col.customerFinal. Includes bookings.detail.payment.postCompletion* keys (Chat 51). |
+| lib/i18n/locales/es.json | Spanish strings — same flat format. Includes translations for refund/customerFinal columns and postCompletion* keys (Chat 51). |
 
 ### Key Libraries & Files — Customer (~/camel-customer)
 | File | Purpose |
@@ -116,15 +115,15 @@ cd ~/camel-customer && git add <file> && git commit -m "message" && git push ori
 | app/ClientRootLayout.tsx | Global layout — LanguageProvider wraps InnerLayout. InnerLayout calls useLanguage() and passes locale to ChatWidget via key={locale} to force remount on language change. PASSWORD_RECOVERY auth event ignored — prevents auto-login on reset page. |
 | app/reset-password/layout.tsx | Standalone layout for reset password page — bypasses ClientRootLayout entirely so no header/auth state shown. |
 | app/page.tsx | Customer homepage — has its own inline nav (not ClientRootLayout header). Auth-aware: loads session on mount, shows burger menu on mobile with language toggle + logged-in/out links. Desktop nav also auth-aware. |
-| app/api/webhooks/stripe/route.ts | Stripe webhook — handles payment_intent.succeeded. Looks up both customer and partner locale, sends all emails in correct language. Passes locale to sendBookingReceiptEmail. |
+| app/api/webhooks/stripe/route.ts | Stripe webhook — handles payment_intent.succeeded. Looks up both customer and partner locale, sends all emails in correct language. Passes locale to sendBookingReceiptEmail. Fires GA4 purchase event via Measurement Protocol after booking confirmed. |
 | app/api/test-booking/customer-profile/route.ts | GET + POST. GET reads full_name, phone, communication_locale, billing_address, tax_id. POST upserts including optional communication_locale, billing_address, tax_id. Uses onConflict: "user_id" and selective field updates. |
 | app/api/chat/route.ts | Customer chat API — reads locale from request body, passes to system prompt so AI replies in correct language. |
-| app/api/test-booking/requests/[id]/route.ts | GET booking detail — now includes post_completion_refund_total and postCompletionRefunds array from partner_booking_refunds. |
+| app/api/test-booking/requests/[id]/route.ts | GET booking detail — ownership enforced via .eq("customer_user_id", customerUser.id). Includes post_completion_refund_total and postCompletionRefunds array. |
 | app/api/test-booking/bookings/[id]/completion-statement/route.ts | Generates downloadable completion statement PDF — fetches partner_booking_refunds from portal DB, passes to PDF generator. Shows amended statement when refunds exist. |
-| app/bookings/[id]/page.tsx | Customer booking detail — shows post-completion refund block in amber when refunds exist. Defers setSession to submit time on reset page (tokens stored in state). |
+| app/bookings/[id]/page.tsx | Customer booking detail — shows post-completion refund block in amber when refunds exist. |
 | app/account/page.tsx | Customer account page — includes VAT Invoice Details card with billing_address and tax_id fields (EN/ES via i18n). These are optional — only needed if customer wants a VAT invoice from the car hire company. |
 | app/terms/page.tsx | Customer terms of use — includes clause 10b "Booking receipt and VAT invoices" clarifying Camel receipt is platform payment confirmation not a VAT invoice. Also added to "not responsible for" list in clause 13. |
-| middleware.ts | Coming-soon redirect removed — site fully live on camel-global.com. |
+| middleware.ts | Passes through all requests (NextResponse.next()). No server-side auth gate — relies on API route auth + client-side redirects. See Future Work for planned middleware improvement. |
 
 ## Invoicing / VAT Architecture (CRITICAL — Chat 50)
 
@@ -158,20 +157,6 @@ These flow to: partner booking detail Journey Information card (read-only), invo
 ALTER TABLE customer_profiles ADD COLUMN billing_address text;
 ALTER TABLE customer_profiles ADD COLUMN tax_id text;
 ```
-
-### Documents changed (Chat 50)
-| Document | Change |
-|---|---|
-| camel-customer/lib/portal/generateBookingReceiptPDF.tsx | Platform Payment Notice added to PDF and EN/ES email body. Payment section re-labelled "Payment to Camel Global". |
-| camel-customer/app/terms/page.tsx | New clause 10b on invoicing. "Issuing VAT invoices" added to not-responsible list in clause 13. |
-| camel-portal/lib/portal/partnerTerms.ts | Clause 9 renamed "VAT, Tax and Invoicing". Three new clauses: partner is supplier; Camel receipt not a VAT invoice; partner must issue VAT invoices on request. Version bumped to 2026-06d. EN+ES. |
-| camel-portal/lib/portal/operatingRules.ts | New section 9b "Invoicing Obligations" (EN+ES) — 6 rules covering partner's invoicing responsibility. |
-| camel-customer/app/account/page.tsx | New "VAT Invoice Details" card with billing_address and tax_id fields. Saved via customer-profile API. |
-| camel-customer/app/api/test-booking/customer-profile/route.ts | GET/POST now includes billing_address and tax_id. |
-| camel-portal/app/api/partner/bookings/[id]/route.ts | Fetches customer billing_address and tax_id from customer_profiles and includes in request row as customer_billing_address and customer_tax_id. |
-| camel-portal/app/partner/bookings/[id]/page.tsx | Shows customer invoice details in Journey Information card. ↓ Invoice Data button calls invoice-data API route (no client-side jsPDF). |
-| camel-portal/lib/portal/generateInvoiceDataPDF.tsx | New file — server-side react-pdf invoice data PDF generator. EN/ES. |
-| camel-portal/app/api/partner/bookings/[id]/invoice-data/route.ts | New file — generates invoice data PDF, uploads to Supabase storage, returns signed URL. |
 
 ## Chat Widget Architecture (CRITICAL)
 ### Overview
@@ -245,6 +230,57 @@ All PDF attachments stay English — NTUK Ltd is a UK company
 The email body and subject wrapping the PDF is in the customer's language
 Exception: Invoice Data PDF (partner-facing data sheet) is EN/ES based on partner locale — it is not a Camel/NTUK legal document
 
+## GA4 Tracking Architecture (CRITICAL — Chat 51)
+
+### Customer site (camel-global.com) — G-1Y758X38G4
+- GA script injected in root layout — all page views tracked automatically
+- Test site uses separate property G-G90QB28J12 — test traffic never pollutes live data
+- Cookie consent gates analytics — CookieBanner fires analytics_storage: granted on accept
+- **Ecommerce tracking** — GA4 `purchase` event fired server-side via Measurement Protocol on every confirmed booking
+  - File: app/api/webhooks/stripe/route.ts
+  - GA4 Measurement ID: G-1Y758X38G4
+  - API Secret: m8xBZ_30QNqmKliAbvC04A (stored in code — move to env var if rotating)
+  - Fields: transaction_id (job number), value (total paid), currency, camel_commission (custom param), items (Car Hire + Fuel Deposit)
+  - Fires after booking insert succeeds — never blocks webhook response
+  - Visible in GA4 → Reports → Monetisation → Ecommerce purchases (24-48hr delay)
+
+### Portal (portal.camel-global.com) — G-YCZMDQJDM7
+- GA script injected in root layout — all page views tracked automatically
+- No cookie consent gate (partner/admin facing — lower GDPR risk)
+- outreach_cta_click custom event — fires on hero/apply/final-cta button clicks when utm_source=outreach
+- partner_signup_complete custom event — fires on application-submitted page
+
+### Outreach email tracking
+- All links have UTM params: utm_source=outreach&utm_medium=email&utm_campaign=founding-partner&utm_content=signup-button&utm_term={country}&ref={prospect_id}
+- GA attributes sessions automatically when recipients click through
+
+## Security Architecture (CRITICAL — Chat 51)
+
+### URL tamper protection — confirmed secure
+- Customer API routes enforce ownership: `.eq("customer_user_id", customerUser.id)` — guessing another customer's booking URL returns 404
+- Partner API routes enforce ownership: `.eq("partner_user_id", userId)` unless adminMode — guessing another partner's booking URL returns 404
+- Identity always comes from verified JWT token — never from URL params or request body
+- Returns 404 (not 403) on ownership mismatch — correct security practice (don't confirm resource exists)
+
+### robots.txt — confirmed correct
+- Customer site: allows all public pages, blocks /bookings/, /account/, /reset-password/, /api/
+- Portal: allows /, /partner/signup, /partner/terms, /partner/privacy only. Blocks /partner/, /admin/, /driver/, /api/
+- Test sites: block everything (noindex)
+
+### Middleware — no server-side auth gate (by design)
+- Both repos currently use pass-through middleware (NextResponse.next())
+- Auth is enforced at API route level (correct and sufficient)
+- Client-side redirects handle unauthenticated page access
+- Server-side middleware auth gate is deferred — see Future Work
+- Reason: Supabase cookie names vary by project, risk of breaking logged-in users on live site outweighs benefit
+
+### Other security
+- CSP form-action — portal: 'self' only; customer: 'self' https://checkout.stripe.com https://*.stripe.com
+- Stripe Radar — enabled
+- 2FA: Vercel, GitHub, Supabase, Gmail — all done ✅
+- Domain Guard — activated on camel-global.com in Fasthosts ✅
+- SSL — handled by Vercel on all domains ✅
+- press@camel-global.com forwarder referenced in contact form route — verify this exists in Fasthosts
 
 ## i18n Architecture (CRITICAL)
 ### How it works
@@ -269,15 +305,14 @@ Steps show a 🔒 placeholder with translated message when locked. Step indicato
 ### Portal
 ✅ Phase 1–4 — All complete
 ✅ Chat 46 — Driver steps + chat widget
-✅ Chat 49 — Refund/Customer Final column translations (bookings.table.col.refund, bookings.table.col.customerFinal, reports.bookings.col.refund, reports.bookings.col.customerFinal)
+✅ Chat 49 — Refund/Customer Final column translations
+✅ Chat 51 — Post-completion refund strings in partner booking detail (bookings.detail.payment.postCompletion* keys EN+ES)
 ### Customer
 ✅ Phase 5 — Customer site (Complete)
 ✅ Chat 46 — Chat widget EN/ES
 ✅ Chat 49 — reset.subtitle key added EN+ES
-✅ Chat 50 — account.vatDetails.* keys added EN+ES (billing address + tax ID fields)
+✅ Chat 50 — account.vatDetails.* keys added EN+ES
 ❌ Phase 6 — Future languages (Future)
-IT, PT, FR, DE — add a new JSON file to both repos + one line in LanguageContext.tsx, zero other code changes needed.
-Email templates also need updating per language — see Email Architecture section.
 
 ## Translation Roadmap
 | Phase | Scope | Status |
@@ -299,7 +334,6 @@ completeBooking.tsx uses a direct REST fetch with NEXT_PUBLIC_SUPABASE_URL + SUP
 
 ## DB Schema Additions (Chat 49)
 ```sql
--- Post-completion refunds table
 CREATE TABLE partner_booking_refunds (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id uuid REFERENCES partner_bookings(id),
@@ -308,27 +342,28 @@ CREATE TABLE partner_booking_refunds (
   stripe_refund_id text,
   created_at timestamptz DEFAULT now()
 );
-
--- Post-completion refund total on bookings
 ALTER TABLE partner_bookings ADD COLUMN post_completion_refund_total numeric DEFAULT 0;
 ```
 
 ## DB Schema Additions (Chat 50)
 ```sql
--- Customer billing details for VAT invoice purposes
 ALTER TABLE customer_profiles ADD COLUMN billing_address text;
 ALTER TABLE customer_profiles ADD COLUMN tax_id text;
 ```
+
+## DB State (Chat 51)
+- All sandbox test data deleted — clean slate for live
+- 4 auth users kept: nicktrin@gmail.com (super_admin + customer), nickt@esposti.co.uk (admin), artur.kzn2006@gmail.com (partner), nicktrin+103@gmail.com (driver)
+- 3 partner profiles, 3 partner applications, 0 bookings, 0 requests
+- Job number sequence left at 1000166 — next real booking will be #1000167
+- global_job_number_seq — use this name, not job_number_seq
 
 ## Completion Flow (CRITICAL)
 
 app/api/test-booking/bookings/[id]/update/route.ts (camel-customer) sets booking_status = completed
 Calls POST /api/internal/complete-booking on the portal with CRON_SECRET
 app/api/internal/complete-booking/route.ts (camel-portal) validates secret and calls completeBooking()
-completeBooking() — NOW: retrieves transfer ID from payment intent, reverses partner transfer by fuel refund amount FIRST, then issues Stripe customer refund, sends customer + partner + admin emails with PDF
-Partner email language determined by partner_profiles.communication_locale
-Customer email language determined by customer_requests.customer_user_id → customer_profiles.communication_locale
-
+completeBooking() — retrieves transfer ID from payment intent, reverses partner transfer by fuel refund amount FIRST, then issues Stripe customer refund, sends customer + partner + admin emails with PDF
 
 ## Stripe Payment Architecture (CRITICAL)
 ### Payment split
@@ -338,13 +373,18 @@ Partner payout = car hire − commission + fuel charge − post-completion refun
 Customer final = total paid − fuel refund − post-completion refunds
 Camel net income = commission − Stripe fee
 
-### Refund flow (CRITICAL — Chat 49)
-ALL refunds (fuel refund on completion AND post-completion refunds) now follow this two-step process:
+### Refund flow (CRITICAL — Chat 49 + Chat 51)
+ALL refunds follow this two-step process:
 1. **Reverse the transfer** to the partner's connected account — pulls money back from partner first
 2. **Refund the customer** from Camel's main Stripe account
 
-Transfer ID is retrieved from: `stripe.paymentIntents.retrieve(id, { expand: ['latest_charge'] })` → `latest_charge.transfer`
-Transfer reversal: `stripe.transfers.createReversal(transferId, { amount })`
+**Post-completion refund transfer reversal (CRITICAL — Chat 51 fix):**
+- Route fetches actual transfer from Stripe: `stripe.transfers.retrieve(transferId, { expand: ["reversals"] })`
+- Uses `transfer.amount_reversed` (authoritative Stripe value) to calculate what's left: `availableCents = transfer.amount - transfer.amount_reversed`
+- Reverses only `Math.min(requestedAmount, availableAmount)` from partner
+- Refunds full requested amount to customer regardless — any shortfall absorbed from Camel's commission balance
+- This prevents the 400 ERR that occurred when trying to reverse more than the partner had available
+- Admin email shows "Reversed from partner" and "Absorbed by Camel" for audit trail
 
 ### Commission calculation rule
 NEVER use commission_amount or partner_payout_amount from DB. Always recalculate:
@@ -356,13 +396,12 @@ const customerFinal = Math.max(0, total_paid - fuel_refund - pcRefund);
 ```
 
 ### Stripe account (CRITICAL)
-- Live Stripe account is set up under NTUK Ltd as a Limited Company
-- Business model: Marketplace (customers pay Camel Global, Camel pays out to partners)
-- Old sandbox account was set up as sole trader — do NOT use it for live
-- **Currently running SANDBOX (test) keys** in Vercel — switch to live keys when ready for real payments
-- Webhook endpoint (sandbox): https://www.camel-global.com/api/webhooks/stripe — event: payment_intent.succeeded
-- STRIPE_WEBHOOK_SECRET is set in camel-customer-live only (that's where the webhook handler lives)
-- STRIPE_SECRET_KEY is set in both projects (portal needs it for Connect transfers and refunds)
+- Live Stripe account — NTUK Ltd Limited Company, marketplace model
+- **LIVE keys now active in Vercel** (switched Chat 51)
+- Webhook endpoint: https://www.camel-global.com/api/webhooks/stripe — event: payment_intent.succeeded
+- STRIPE_WEBHOOK_SECRET is set in camel-customer-live only
+- STRIPE_SECRET_KEY is set in both projects
+- Live test booking #1000167 confirmed working — €15 payment, transfer reversal, fuel refund all correct
 
 ### Supabase URL Configuration (CRITICAL)
 - Site URL: https://www.camel-global.com
@@ -392,38 +431,18 @@ Same as partner but redirectTo=/driver/reset-password
 - Preview: https://test.camel-global.com
 - Must be split into two separate Vercel env vars (Production only + Preview only)
 
-## Post-Completion Refund Architecture (CRITICAL — Chat 49)
+## Post-Completion Refund Architecture (CRITICAL — Chat 49 + Chat 51)
 ### How it works
 1. Admin → booking detail → "Post-Completion Refunds" card → enter amount + reason → "Issue Refund & Send Amended Statement"
-2. API (post-refund/route.ts):
-   - Validates completed status
-   - Caps at car_hire + fuel_charge
-   - Retrieves transfer ID from Stripe payment intent
-   - Reverses partner's transfer by refund amount (pulls money from partner)
-   - Issues Stripe refund to customer
-   - Inserts into partner_booking_refunds table
-   - Updates post_completion_refund_total on partner_bookings
-   - Regenerates amended PDF statement
-   - Emails customer (EN/ES) with amended statement attached
-   - Emails admin with full breakdown
-3. "↗ Resend Statement" button on all completed bookings — re-emails current statement (original or amended)
-4. Partner sees read-only amber refund block in their booking detail
-5. Commission invoices NOT affected by post-completion refunds (by design)
+2. API (post-refund/route.ts) — fetches real transfer balance from Stripe, reverses only what partner has, refunds full amount to customer, emails customer + admin
+3. "↗ Resend Statement" button on all completed bookings
+4. Partner sees read-only amber refund block
+5. Commission invoices NOT affected by post-completion refunds
 
 ### Where post-completion refunds appear
-- Admin booking detail — PaymentFeesCard split into two sections: "What the customer paid" and "Partner payout breakdown"
-- Admin booking detail — Post-Completion Refunds card (issue new refund + history)
-- Admin bookings list — "Refund" column (amber), "Customer Final" column, "Partner Payout" adjusted
-- Admin reports — Revenue & Fuel Reconciliation table: same columns
-- Admin reports — Payments/Financial Dashboard table: Refund + Customer Final columns
-- Admin CSV exports — Refund + Customer Final columns in both sheets
-- Partner booking detail — amber refund banner + read-only refund history
-- Partner bookings list — "Refund" column, "Customer Final" column, "Net Payout" adjusted
-- Partner reports — Refund + Customer Final columns (translated EN/ES)
-- Partner CSV exports — Refund + Customer Final columns
-- Customer booking page — amber post-completion refund block showing breakdown
-- Customer completion statement PDF — "AMENDED" header, refund lines, net final amount
-- Partner invoice data PDF — amber refund box, net total after refunds (Chat 50)
+- Admin booking detail, bookings list, reports, CSV exports
+- Partner booking detail (amber banner + history, EN/ES translated — Chat 51), bookings list, reports, CSV exports
+- Customer booking page, completion statement PDF
 
 ## Column Naming Conventions (Chat 49)
 | Concept | Admin bookings | Admin reports | Partner bookings | Partner reports |
@@ -445,66 +464,37 @@ When a customer raises a dispute or chargeback, admin can place a booking's payo
 - Admin goes to admin booking detail → "Payout Hold" card → enters reason → clicks "Hold Payout"
 - Monthly cron (app/cron/monthly-payout/route.ts) skips any booking where payout_hold = true
 - Once resolved, admin clicks "Release Payout Hold" → booking is included in next monthly run
-- Partner sees amber "Payment Disputed" banner on their booking detail — no reason shown
+- Partner sees amber "Payment Disputed" banner — no reason shown
 - Admin sees full hold reason + release button
 
-### Where disputed status appears:
-- Admin bookings list — amber "Disputed" status pill + "On Hold" payout status pill
-- Admin booking detail — amber banner at top + Payout Hold card
-- Admin reports — amber "Disputed" pill in both tables, "Disputed" filter option in status dropdown
-- Admin reports CSV — Booking Status and Payout Status columns show "Disputed" / "On Hold"
-- Admin financial dashboard — "Disputed (N)" card per currency showing held payout amounts
-- Partner bookings list — amber "Disputed" status pill
-- Partner booking detail — amber "Payment Disputed" banner
-- Partner reports — amber "Disputed" pill, "Disputed" filter (translated EN/ES), Disputed summary card per currency
-- Partner reports CSV — Booking Status and Payout Status columns show "Disputed" / "On Hold"
-- Partner bookings CSV — Payout Hold Yes/No column
-
 ### Partner email lookup (CRITICAL):
-Partner email is on partner_applications.email (NOT partner_profiles). Admin booking detail fetches it via:
-```typescript
-const { data: applicationRow } = await db
-  .from("partner_applications")
-  .select("email")
-  .eq("user_id", bookingRow.partner_user_id)
-  .maybeSingle();
-```
+Partner email is on partner_applications.email (NOT partner_profiles).
 
 ## Fuel Override Architecture (CRITICAL)
 Effective fuel = partner override (collection_fuel_level_partner) if set, else driver reading (collection_fuel_level_driver).
 
 ## Commission Invoice Architecture (CRITICAL)
-
 Auto-generated: Vercel cron 1st of each month at 08:00 UTC
 Date column: uses created_at from partner_bookings
 Commission invoices stay in English — NTUK is a UK company
 Commission invoices NOT affected by post-completion refunds
 
-
 ## Partner Terms Architecture (CRITICAL)
-
 Single source of truth: lib/portal/partnerTerms.ts
 Current version: 2026-06d effective 12 June 2026
-Clause 7 includes chargeback/dispute payout hold clause
-Clause 9 "VAT, Tax and Invoicing" — includes invoicing obligation (partner must issue VAT invoices to customers)
+Clause 7: chargeback/dispute payout hold clause
+Clause 9 "VAT, Tax and Invoicing": invoicing obligation (partner must issue VAT invoices to customers)
 
-
-## Security Architecture
-
-CSP form-action — portal: 'self' only; customer: 'self' https://checkout.stripe.com https://*.stripe.com
-Stripe Radar — enabled
-2FA: Vercel, GitHub, Supabase, Gmail — all done ✅
-Domain Guard — activated on camel-global.com in Fasthosts ✅
-SSL — handled by Vercel on all domains ✅
-
+## Map z-index Fix (Chat 51)
+Leaflet maps were rendering above the sidebar/header on scroll. Fixed by adding `style={{ zIndex: 0, position: "relative" }}` to the map wrapper div in:
+- app/partner/profile/MapPickerInner.tsx
+- app/admin/approvals/PartnersMap.tsx
 
 ## PDF Logo Architecture
-
 Logo file: ~/camel-portal/public/camel-invoice-logo.png
 completeBooking.tsx (portal) — reads from disk via fs.readFileSync
 generateCompletionStatementPDF.tsx + generateBookingReceiptPDF.tsx (customer) — fetches from https://portal.camel-global.com/camel-invoice-logo.png
 generateInvoiceDataPDF.tsx (portal) — fetches from https://portal.camel-global.com/camel-invoice-logo.png
-
 
 ## Outreach Email Architecture (CRITICAL — Chat 47)
 Files: all in camel-portal only.
@@ -516,56 +506,36 @@ Files: all in camel-portal only.
 | app/api/admin/outreach/prospects/route.ts | GET/POST prospects |
 | app/api/admin/outreach/prospects/[id]/route.ts | PATCH/DELETE prospect |
 | app/api/admin/outreach/unsubscribe/route.ts | Public GET — sets unsubscribed=true, redirects to portal homepage with ?unsubscribed=true banner |
-| app/HomePageContent.tsx | Shows unsubscribed banner when ?unsubscribed=true. Also has customer site section linking to camel-global.com. GA outreach CTA click tracking. |
-| public/camel-logo-white-new.png | White version of camel logo for use in outreach emails (email clients don't support CSS filter) |
+| app/HomePageContent.tsx | Shows unsubscribed banner when ?unsubscribed=true. GA outreach CTA click tracking. |
+| public/camel-logo-white-new.png | White version of camel logo for outreach emails |
 
 ### Outreach email rules
 - Sent from: `Camel Global <noreply@camel-global.com>`
-- Subject EN: `Camel Global - Meet & Greet Car Hire - Founding Partner Invitation`
-- Subject ES: `Camel Global - Meet & Greet Alquiler de Coches - Invitación a Socio Fundador`
-- Logo: `https://portal.camel-global.com/camel-logo-white-new.png` — white PNG, no CSS filter needed
-- Email body is fully hardcoded — no AI generation. Opening line personalised with contact first name and city.
 - Language: Spain → Spanish, all other countries → English
 - Daily limit: 50 emails
 - UTM params on all links: utm_source=outreach, utm_medium=email, utm_campaign=founding-partner, utm_content=signup-button, utm_term={country-slug}, ref={prospect_id}
-- Batch send: pending prospects only, respects country filter, never includes Send Again
-- Send Again: manual only, all non-unsubscribed rows, counts towards daily limit
-- Unsubscribe: List-Unsubscribe header set on every email (Resend one-click). Link in footer sets unsubscribed=true on prospect record. Unsubscribed prospects are never sent to even on resend.
-- DB column: outreach_prospects.unsubscribed boolean (added Chat 47)
-- "unsub" badge shown on unsubscribed rows in the table
+- Unsubscribed prospects are never sent to
 
-### GA tracking for outreach (Chat 48)
-- UTM params on all email links — GA attributes sessions automatically
-- outreach_cta_click event fires on Sign Up CTA clicks (hero, apply, final-cta sections) when utm_source=outreach
-- partner_signup_complete event fires on application-submitted page when status=pending
-- Both events pass utm_term (country) and utm_campaign for breakdown in GA
-
-### logo generation command (run if camel-logo-white-new.png ever needs regenerating)
-```bash
-python3 -c "
-from PIL import Image
-img = Image.open('$HOME/camel-portal/public/camel-logo.png').convert('RGBA')
-pixels = img.load()
-w, h = img.size
-for y in range(h):
-    for x in range(w):
-        r, g, b, a = pixels[x, y]
-        if a > 10:
-            pixels[x, y] = (255, 255, 255, a)
-img.save('$HOME/camel-portal/public/camel-logo-white-new.png')
-print('Done')
-"
-```
-Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert makes them blue in email clients. Must replace pixel colours directly with Python/Pillow.
+## Contact Form Routing (Chat 51)
+File: app/api/contact/route.ts (camel-portal)
+| Subject | Routes to |
+|---|---|
+| General enquiry | contact@camel-global.com |
+| Booking question | contact@camel-global.com |
+| Partnership / become a partner | partners@camel-global.com |
+| Press or media | press@camel-global.com |
+| Technical issue | contact@camel-global.com |
+| Other | contact@camel-global.com |
+⚠️ press@camel-global.com is referenced in code — verify this forwarder exists in Fasthosts
 
 ## Environment Variables (CRITICAL)
 | Variable | Repo | Value |
 |---|---|---|
 | NEXT_PUBLIC_SITE_URL (Production) | camel-customer (Vercel) | https://www.camel-global.com |
 | NEXT_PUBLIC_SITE_URL (Preview) | camel-customer (Vercel) | https://test.camel-global.com |
-| STRIPE_SECRET_KEY | both projects | **Currently test/sandbox keys** — switch to sk_live_... when ready for real payments |
-| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | camel-customer | **Currently test/sandbox key** — switch to pk_live_... when ready |
-| STRIPE_WEBHOOK_SECRET | camel-customer only | **Currently test webhook secret** — switch to live when ready |
+| STRIPE_SECRET_KEY | both projects | **LIVE keys active** — sk_live_...z3pe |
+| NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY | camel-customer | **LIVE key active** |
+| STRIPE_WEBHOOK_SECRET | camel-customer only | **LIVE webhook secret active** |
 | PORTAL_BASE_URL | camel-portal | https://portal.camel-global.com |
 
 ## Email Addresses
@@ -576,104 +546,72 @@ Note: camel-logo.png pixels are yellow/gold (247, 209, 77) — CSS filter invert
 | partners@camel-global.com | Forwarder | artur@ + info@ |
 | noreply@camel-global.com | Forwarder | info@ + artur@ |
 | email@camel-global.com | Forwarder | nicktrin@gmail.com + artur@ |
+| press@camel-global.com | Forwarder? | Verify exists in Fasthosts |
 
 ## Stable Tags
 ### Portal (~/camel-portal)
 | Tag | Description |
 |---|---|
-| v-stable-chat39-complete | Chat 39 complete |
-| v-stable-chat40-i18n-complete | Chat 40 — full partner portal + driver portal i18n EN/ES |
-| v-stable-chat41-complete | Chat 41 complete |
-| v-stable-chat42-complete | Chat 42 complete |
-| v-stable-chat44-complete | Chat 44 complete |
-| v-stable-chat45-email-locale | Chat 45 complete — all emails locale-aware |
-| v-stable-chat46-complete | Chat 46 complete — driver steps enforced EN/ES, chat widget full EN/ES |
-| v-stable-chat47-complete | Chat 47 complete — outreach improvements |
-| v-stable-chat48-complete | Chat 48 complete — GA tracking, payout hold dispute system, Stripe live setup |
-| v-stable-chat49-complete | Chat 49 — post-completion refunds, amended statements, resend statement, full reporting |
-| v-stable-chat49-reset-password | Chat 49 — all reset password pages fixed and rebranded |
-| v-stable-chat49-refunds | Chat 49 — transfer reversals on all refunds, admin/partner columns fixed, customer booking page updated |
-| v-stable-chat50-complete | Chat 50 — invoicing obligations across all docs, VAT invoice data PDF EN/ES, customer billing details |
+| v-stable-chat49-refunds | Chat 49 — transfer reversals, admin/partner columns |
+| v-stable-chat50-complete | Chat 50 — invoicing obligations, VAT invoice data PDF EN/ES |
+| v-stable-chat50-post-completion-i18n | Chat 50 — post-completion refund strings translated EN/ES |
+| v-stable-chat51-live-stripe | Chat 51 — live Stripe, DB cleanup, post-refund transfer reversal fix, map z-index, GA4 ecommerce, robots confirmed |
 
 ### Customer (~/camel-customer)
 | Tag | Description |
 |---|---|
-| v-stable-chat39-complete | Chat 39 complete |
-| v-stable-chat43-phase5-i18n | Chat 43 — Phase 5 complete |
-| v-stable-chat44-complete | Chat 44 complete |
-| v-stable-chat45-email-locale | Chat 45 complete — all emails locale-aware |
-| v-stable-chat46-complete | Chat 46 complete — chat widget full EN/ES |
-| v-stable-chat49-reset-password | Chat 49 — customer reset fixed, detectSessionInUrl disabled, coming-soon removed, site live |
-| v-stable-chat49-refunds | Chat 49 — customer booking page shows post-completion refunds, downloadable PDF amended |
-| v-stable-chat50-complete | Chat 50 — platform notice on receipt PDF/email, customer terms invoicing clause, customer billing details, VAT invoice details account card |
+| v-stable-chat49-refunds | Chat 49 — customer booking page, amended PDF |
+| v-stable-chat50-complete | Chat 50 — platform notice on receipt, billing details, VAT account card |
+| v-stable-chat51-live-stripe | Chat 51 — live Stripe, GA4 ecommerce purchase tracking |
 
 ## Rollback
 ```bash
-cd ~/camel-portal && git checkout v-stable-chat50-complete
-cd ~/camel-customer && git checkout v-stable-chat50-complete
+cd ~/camel-portal && git checkout v-stable-chat51-live-stripe
+cd ~/camel-customer && git checkout v-stable-chat51-live-stripe
 ```
 
 ## What Is Working ✅
 
-Customer booking flow — homepage, date picker, driver age, Book Now layout correct all screen sizes
-Guest booking flow — draft survives login/signup redirect
+Customer booking flow — all screen sizes, guest booking draft survives redirect
 Partner bid submission and management
-Driver job portal — fully translated EN/ES, step order enforced (insurance → delivery fuel → collection fuel), step labels and lock messages translated
+Driver job portal — EN/ES, step order enforced
 Admin approval and account management
-Partner approval gate
-Full EUR / GBP / USD currency support
-Full commission system
+Full EUR / GBP / USD currency support + live exchange rates
+Full commission system (20% min €10)
 Fuel level recording, override, charge/refund calculation
-Fuel refund on completion — Stripe transfer reversal THEN customer refund (Chat 49)
-Post-completion refunds — Stripe transfer reversal THEN customer refund, amended PDF emailed, shown everywhere (Chat 49)
-All customer notification emails EN/ES
-All partner notification emails EN/ES
-PDF attachments always English (except invoice data PDF which is EN/ES — Chat 50)
-Chat widget EN/ES — UI strings, AI replies, and locale sent correctly in both portal and customer
+Fuel refund on completion — transfer reversal THEN customer refund
+Post-completion refunds — transfer reversal uses Stripe transfer.amount_reversed for accuracy (Chat 51 fix)
+All customer + partner notification emails EN/ES
+PDF attachments always English (except invoice data PDF EN/ES)
+Chat widget EN/ES — both portal and customer
 Review reminder email
-Completion statement PDF + booking receipt PDF
-Amended completion statement PDF — shows when post-completion refunds exist
+Completion statement PDF + booking receipt PDF + amended statement PDF
+Invoice Data PDF — EN/ES, server-side react-pdf, signed URL download
 Live status system — 7 checks
 Partner onboarding — 7 steps
 Commission invoices — auto-generated monthly
-Partner terms — single source of truth lib/portal/partnerTerms.ts version 2026-06d (includes chargeback clause + invoicing obligations)
-Operating rules — includes chargeback/dispute payout hold clause EN+ES + invoicing obligations section 9b EN+ES
-Security — CSP, Stripe Radar, 2FA, Domain Guard all done
-Partner outreach — country filter, batch send, send again, unsubscribe, language by country, hardcoded email body, white logo, founding partner messaging, noreply@ sender, UTM tracking
-GA tracking — outreach UTM params, CTA click events, partner signup complete event
-Payout hold / dispute system — admin can hold/release per booking, cron skips held bookings, disputed status shown everywhere, all CSVs updated, financial dashboard disputed card
-Stripe sandbox — NTUK Ltd limited company account, marketplace model, sandbox keys in Vercel, webhook configured
-Site live — camel-global.com coming-soon removed, fully live (Chat 49)
-Password reset — all three flows (customer, partner, driver) fixed and rebranded black/orange (Chat 49)
-404 pages — rebranded black/orange on both portal and customer (Chat 49)
-Admin bookings page — Payout Status, Total Paid, Refund, Customer Final columns; two-section PaymentFeesCard (Chat 49)
-Admin reports page — matching columns to bookings page; payments table updated (Chat 49)
-Partner bookings page — Refund, Customer Final columns EN/ES translated (Chat 49)
-Partner reports page — Refund, Customer Final columns, correct payout calculations (Chat 49)
-All CSV exports — Refund and Customer Final columns in admin and partner (Chat 49)
-Customer booking page — post-completion refund block shown (Chat 49)
-Downloadable completion statement — amended version with refund lines (Chat 49)
-Resend Statement button — on all completed bookings in admin (Chat 49)
-Invoicing obligations — documented in partner terms, operating rules, customer terms, booking receipt PDF/email (Chat 50)
-Customer billing address + tax ID — optional fields on customer account, shown on partner booking detail, included in invoice data PDF (Chat 50)
-Invoice Data PDF — ↓ Invoice Data button on partner booking detail, server-side react-pdf, EN/ES, includes refunds, signed URL download (Chat 50)
+Partner terms v2026-06d — chargeback clause + invoicing obligations
+Operating rules — chargeback clause + invoicing obligations section 9b EN+ES
+Security — CSP, Stripe Radar, 2FA, Domain Guard, URL ownership enforced at API level
+Partner outreach — full system with UTM tracking, EN/ES, unsubscribe
+GA tracking — page views on all pages (both sites), ecommerce purchase events (Chat 51), outreach CTA events
+Payout hold / dispute system — full admin/partner visibility
+**Live Stripe — switched to live keys Chat 51, first live booking #1000167 confirmed working**
+Site live — camel-global.com fully live
+Password reset — all three flows working
+robots.txt — confirmed correct for SEO requirements
+Map z-index — fixed, maps no longer overlap sidebar/header (Chat 51)
+Post-completion refund strings — fully translated EN/ES in partner booking detail (Chat 51)
+DB — clean slate, all sandbox data deleted, 4 accounts kept, job sequence at 1000166
 
-
-## What Needs Building — Next Chat (Chat 51)
-🔲 Test full booking flow end-to-end with Stripe sandbox (new booking, not existing test ones)
-🔲 Verify transfer reversal works correctly — partner connected account balance reduces on refund
-🔲 Switch Stripe keys to live when sandbox testing complete
-🔲 First real partner onboarding in live Stripe Connect mode
-🔲 Live end-to-end test booking with real card
-
-🔲 Lower priority (deferred)
-Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
-Xero monthly commission endpoint
-DAC7 EU platform reporting
-Outreach: set up e.camel-global.com subdomain in Resend for better domain protection (needs Resend plan upgrade)
-
-❌ Phase 6 — Future languages (Future)
-IT, PT, FR, DE — copy en.json to new locale file in both repos, translate values, add locale to LanguageContext.tsx (one line each repo). Also update email templates in both lib/email.ts files.
+## Future Work (Deferred)
+🔲 **Server-side middleware auth gate** — currently middleware passes through all requests. A proper server-side redirect for unauthenticated users hitting /partner/, /admin/, /driver/, /bookings/, /account/ would be cleaner. Deferred because Supabase cookie names vary by project and risk of breaking logged-in users on live site. When implementing: use Supabase official Next.js middleware helper, test on staging first.
+🔲 Commission invoice PDF — VAT number + 20% UK VAT once NTUK is VAT registered
+🔲 Xero monthly commission endpoint
+🔲 DAC7 EU platform reporting
+🔲 Outreach: set up e.camel-global.com subdomain in Resend (needs Resend plan upgrade)
+🔲 press@camel-global.com — verify forwarder exists in Fasthosts
+❌ Phase 6 — Future languages: IT, PT, FR, DE
 
 ## Collaborator Note
 A collaborator works on camel-portal from Windows (C:/dev/camel-portal). He built the Partner Outreach Agent (/admin/outreach). Always git pull before starting.
@@ -681,44 +619,66 @@ Note: camel-coming-soon is a git submodule inside camel-portal. Always shows as 
 
 ## Session Log
 
+### Chat 51 (Completed)
+Live Stripe switch, DB cleanup, post-refund fix, GA4 ecommerce, security review, map fix, i18n fixes
+
+**Live Stripe:**
+- Switched from sandbox to live keys in Vercel (both camel-customer-live and camel-portal-live)
+- Live secret key: sk_live_...z3pe (no expiry, created Jun 15)
+- First live test booking #1000167 — €15 payment, commission €10, fuel refund €2.50 — all confirmed working in Stripe dashboard
+- Connected account (Nick Test Cars) onboarded with Transferwise EUR bank account
+
+**DB cleanup:**
+- Deleted all 48 sandbox partner accounts and 122 bookings
+- Kept: nicktrin@gmail.com (super_admin), nickt@esposti.co.uk (admin), artur.kzn2006@gmail.com (partner), nicktrin+103@gmail.com (driver)
+- All requests, bids, bookings, refunds, reviews wiped clean
+- Job number sequence left at 1000166 — next booking is #1000167
+
+**Post-completion refund fix (CRITICAL):**
+- Bug: transfer reversal was failing with 400 ERR because code calculated partner available balance incorrectly (used full payment amount instead of actual transfer amount)
+- Fix: now fetches actual transfer from Stripe API, reads transfer.amount_reversed directly, calculates availableCents = transfer.amount - transfer.amount_reversed
+- Only reverses what partner actually has — shortfall absorbed from Camel's commission balance
+- Customer always gets full refund regardless
+- File: app/api/admin/bookings/[id]/post-refund/route.ts
+
+**GA4 ecommerce tracking:**
+- Added GA4 Measurement Protocol purchase event to Stripe webhook
+- Fires server-side after every confirmed booking
+- Measurement ID: G-1Y758X38G4, API Secret: m8xBZ_30QNqmKliAbvC04A
+- File: app/api/webhooks/stripe/route.ts (camel-customer)
+
+**Map z-index fix:**
+- Leaflet maps were overlapping sidebar and header on scroll
+- Fixed with style={{ zIndex: 0, position: "relative" }} on wrapper divs
+- Files: app/partner/profile/MapPickerInner.tsx, app/admin/approvals/PartnersMap.tsx
+
+**Post-completion refund i18n:**
+- Hardcoded English strings in partner booking detail PaymentFeesCard translated to EN/ES
+- 7 new keys added to both en.json and es.json: postCompletionTitle, postCompletionRefund, postCompletionTotal, postCompletionNet, postCompletionNote, postCompletionBannerTitle, postCompletionBannerBody
+
+**Security review:**
+- Confirmed URL tamper protection — all API routes enforce ownership via JWT
+- Confirmed robots.txt correct for SEO requirements
+- Confirmed GA tracking working on all pages in both repos
+- Deferred server-side middleware auth gate — not worth the risk on live site
+
+**Confirmed working (Chat 51):**
+- Contact form routes: most subjects → contact@camel-global.com, partnership → partners@camel-global.com, press → press@camel-global.com
+- Stripe application fee = Camel commission (€10 on test booking) — correct
+- Stripe balance mechanics understood — negative balance during settlement period is normal
+
+Stable tags: v-stable-chat51-live-stripe on both repos
+
 ### Chat 50 (Completed)
 Invoicing obligations, VAT invoice data PDF, customer billing details
-
-**Legal / invoicing framework:**
-- Established Camel as marketplace intermediary — partner is the supplier, partner issues VAT invoices to customers (mirrors Airbnb/Uber model)
-- Partner terms clause 9 renamed "VAT, Tax and Invoicing" — three new clauses covering invoicing obligation (EN+ES). Version bumped to 2026-06d.
-- Operating rules new section 9b "Invoicing Obligations" (EN+ES) — 6 rules
-- Customer terms new clause 10b "Booking receipt and VAT invoices" — clarifies Camel receipt is not a VAT invoice
-- Customer terms clause 13 "not responsible for" list — added issuing VAT invoices
-
-**Booking receipt PDF/email updates (camel-customer):**
-- Platform Payment Notice added to PDF (grey box) and EN/ES email bodies
-- Payment section header changed to "Payment to Camel Global" / "Total paid to Camel Global"
-
-**Customer billing details:**
-- DB: billing_address and tax_id columns added to customer_profiles
-- Customer account page — new "VAT Invoice Details" card (EN/ES via i18n keys account.vatDetails.*)
-- customer-profile API route — GET/POST now includes billing_address and tax_id
-- Portal partner booking API route — fetches billing_address and tax_id from customer_profiles, included in response as customer_billing_address and customer_tax_id
-- Partner booking detail page — shows customer invoice details in Journey Information card (read-only)
-
-**Invoice Data PDF (camel-portal):**
-- New file: lib/portal/generateInvoiceDataPDF.tsx — server-side @react-pdf/renderer
-- New route: app/api/partner/bookings/[id]/invoice-data/route.ts — generates PDF, uploads to Supabase storage, returns 60s signed URL
-- ↓ Invoice Data button on partner booking detail calls API route and opens signed URL in new tab (no client-side jsPDF)
-- PDF is EN/ES based on partner_profiles.communication_locale
-- Contains: booking ref, customer details (incl. billing address + tax ID if provided), hire details, financial summary, refund box (amber, if refunds exist), net total, blank fields for partner to complete
-- wrap={false} keeps gross total bar + refund box + net total together on same page
-- Uploaded to booking-receipts bucket: {request_id}/invoice-data-{ref}.pdf
-
-Stable tags: v-stable-chat50-complete on both repos
+Stable tags: v-stable-chat50-complete, v-stable-chat50-post-completion-i18n on portal; v-stable-chat50-complete on customer
 
 ### Chat 49 (Completed)
 Post-completion refund system, site go-live, password reset fixes, reporting improvements
 Stable tags: v-stable-chat49-complete, v-stable-chat49-reset-password, v-stable-chat49-refunds on both repos
 
 ### Chat 48 (Completed)
-GA tracking, payout hold dispute system, Stripe live setup, portal homepage improvements
+GA tracking, payout hold dispute system, Stripe live setup
 Stable tag: v-stable-chat48-complete on camel-portal
 
 ### Chat 47 (Completed)
@@ -728,16 +688,6 @@ Stable tag: v-stable-chat47-complete on camel-portal
 ### Chat 46 (Completed)
 Driver step order enforcement + Chat widget full EN/ES
 Stable tags: v-stable-chat46-complete on both repos
-
-### Chat 45 (Completed)
-Bug fixes, full email locale system, fuel label i18n
-Stable tags: v-stable-chat45-email-locale on both repos
-
-### Chat 44 (Completed)
-Customer i18n fixes, customer email locale, mobile burger menu
-
-### Chat 43 (Completed)
-Phase 5: Customer site i18n — full EN/ES translation
 
 ## Useful Commands
 ```bash
@@ -758,6 +708,9 @@ find ~/camel-customer -not -path '*/node_modules/*' -not -path '*/.git/*' -not -
 # Create stable tag
 git tag -a v-tag-name -m "description" && git push origin v-tag-name
 
+# Check job number sequence
+SELECT last_value FROM global_job_number_seq;
+
 # Manual cron trigger
 curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://portal.camel-global.com/api/cron/monthly-payout
 
@@ -774,20 +727,6 @@ with open('/path/to/file.tsx', 'w') as f:
 print("Done")
 EOF
 
-# Regenerate white outreach logo if needed
-python3 -c "
-from PIL import Image
-img = Image.open('$HOME/camel-portal/public/camel-logo.png').convert('RGBA')
-pixels = img.load()
-w, h = img.size
-for y in range(h):
-    for x in range(w):
-        r, g, b, a = pixels[x, y]
-        if a > 10:
-            pixels[x, y] = (255, 255, 255, a)
-img.save('$HOME/camel-portal/public/camel-logo-white-new.png')
-" && cd ~/camel-portal && git add -f public/camel-logo-white-new.png && git commit -m "Regenerate white logo" && git push origin main
-
 # IMPORTANT: camel-coming-soon is a submodule — always shows modified, ignore it.
 git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 
@@ -796,12 +735,12 @@ sed -i '' 's/old text/new text/' ~/camel-portal/path/to/file.ts
 grep -n "new text" ~/camel-portal/path/to/file.ts
 git add path/to/file.ts && git commit -m "message" && git push origin main
 
-# Switch Stripe from sandbox to live (when ready)
+# Switch Stripe from live back to sandbox (if needed for testing)
 # In Vercel camel-customer-live AND camel-portal-live:
-# STRIPE_SECRET_KEY → sk_live_...
-# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY → pk_live_... (customer only)
-# STRIPE_WEBHOOK_SECRET → whsec_... from live webhook endpoint (customer only)
+# STRIPE_SECRET_KEY → sk_test_...
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY → pk_test_... (customer only)
+# STRIPE_WEBHOOK_SECRET → whsec_... from test webhook endpoint (customer only)
 # Then redeploy both projects
 ```
 
-Last updated: Chat 50 complete — invoicing obligations across all documents, VAT invoice data PDF (EN/ES, server-side react-pdf), customer billing address + tax ID fields, platform payment notice on booking receipt PDF/email.
+Last updated: Chat 51 complete — live Stripe active, DB cleaned, post-refund transfer reversal fixed, GA4 ecommerce tracking, map z-index fixed, post-completion refund strings translated EN/ES, security confirmed, robots confirmed.
