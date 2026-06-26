@@ -605,3 +605,89 @@ EOF
 # camel-coming-soon is a submodule — always shows modified, ignore it
 git add app/path/to/file.tsx && git commit -m "message" && git push origin main
 Last updated: Chat 52 complete — FR/IT/PT/DE full i18n (1770 keys each), language switchers on all pages and mobile, outreach emails localised, approval email redesigned, onboarding reminder cron, Stripe country mapping expanded. Next: Chat 53 — Terms & Operating Rules PDF translations FR/IT/PT/DE.
+
+### Chat 53b — i18n follow-up (legal note, chat, mobile toggle)
+Triggered by /partner/signup screenshot (4 issues). Tag: v-stable-chat53b-i18n-fixes.
+
+1. **Legal note** — removed "reference only" wording from PARTNER_TERMS/OPERATING_RULES
+   legalNote (es/fr/it/pt/de), keeping only the "English prevails" line. First attempt
+   corrupted the live files via multibyte paste; repaired with a pure-ASCII (\u-escaped)
+   re.subn that overwrites legalNote regardless of current content. Files:
+   lib/portal/partnerTerms.ts, lib/portal/operatingRules.ts.
+2. **Chat now FR/IT/PT/DE** — app/api/chat/route.ts: replaced the es-or-en ternary with a
+   LANG_NAMES map + ${langName}, so the model is told to reply in the actual selected
+   language. app/components/ChatWidget.tsx: broadened type Locale to all 6 and added
+   FR/IT/PT/DE STRINGS (welcome/suggestions/buttons), fixed stray "?" in en welcome.
+   PORTAL widget only — customer-repo ChatWidget stays EN/ES (correct).
+3. **Mobile language switcher** — the 6-button inline CompactLanguageToggle overflowed
+   (DE → "D"). Replaced with a compact "EN ▾" dropdown in app/partner/signup/page.tsx
+   and app/HomePageContent.tsx.
+4. **Signup/onboarding** confirmed already fully t()-wired; only removed a leftover
+   `locale as "en"|"es"` cast in signup Step 5.
+
+Delivery lessons (paste pipeline): multibyte UTF-8 corrupts in terminal paste — always
+ship patches as pure-ASCII \u escapes. Even base64 long pastes can take a single homoglyph
+substitution (an "F" became Cyrillic "Ф") — gzip+base64 halves the payload and hard-fails
+on any corruption instead of writing garbage. Validate code edits with `npx tsc --noEmit`
+against a faithful fixture, not just structural string checks: the chat STRINGS were first
+inserted into the value *type* block instead of the value object because the brace-counter
+anchored on the first `{` after `const STRINGS` (the type) rather than the `= {` value open.
+Backups this round: .chat53c / .chat53d / .chat53e.<stamp>.bak.
+
+~~Terms & Operating Rules PDF translations — FR, IT, PT, DE~~ ✅ Chat 53
+~~Localize chat widget + mobile language switcher to FR/IT/PT/DE~~ ✅ Chat 53b
+
+### Chat 53f — partner terms/rules headings were still English
+The Chat 52/53 translation run translated clause/rule BODIES but left most section
+HEADINGS (titles / section names) in English — its validator only checked JSON shape,
+not that text changed. Pages and PDF were correct; the arrays were the problem.
+Fix: re-translated only the 17 terms titles + 14 rules section names per language,
+keeping every clause body byte-identical; new guard rejects any heading returned
+identical to English and retries. Files: lib/portal/partnerTerms.ts, operatingRules.ts.
+Backups .chat53f.<stamp>.bak. Lesson: when validating machine translation, assert the
+output DIFFERS from the source, not just that it parses.
+
+### Chat 53f/g — finishing portal i18n (terms/rules/account + settings)
+Two root causes, both outside the files we kept editing:
+1. **Uncommitted working-tree fixes.** app/partner/{terms,operating-rules,account}/page.tsx
+   had the locale-aware RULES_BY_LOCALE/TERMS_BY_LOCALE edits applied on disk since Chat 53
+   but NEVER committed — HEAD still had `locale === "es" ? _ES : _EN`, so production served
+   English for FR/IT/PT/DE. Fix: commit + push the three pages. LESSON: disk-correct ≠
+   deployed; check `git show HEAD:<file>` / the live DOM, not just the working copy.
+2. **DB CHECK constraint.** partner_profiles.communication_locale_check only allowed
+   ('en','es'); picking FR/IT/PT/DE on /partner/settings threw "violates check constraint".
+   Fix (Supabase SQL): drop + re-add CHECK allowing en,es,fr,it,pt,de. customer_profiles
+   still en,es by design (customer site is EN/ES). LESSON: widening UI language options
+   needs matching DB constraint changes.
+Section headings (Chat 53f): re-translated FR/IT/PT/DE titles/section-names; bodies
+byte-identical. Verified live via browser (DE renders German end-to-end; settings save persists).
+---
+
+### Chat 53f/g - finishing portal i18n (terms/rules/account + settings) [Jun 26]
+Two root causes, both OUTSIDE the files we kept editing:
+
+1. Uncommitted working-tree fixes. app/partner/{terms,operating-rules,account}/page.tsx
+   had the locale-aware TERMS_BY_LOCALE / RULES_BY_LOCALE edits applied on disk since
+   Chat 53 but were NEVER committed - HEAD still had `locale === "es" ? _ES : _EN`, so
+   production served English for FR/IT/PT/DE. Fix: committed + pushed the three pages.
+   LESSON: disk-correct is NOT deployed. When a fix "isn't taking", check
+   `git show HEAD:<file>` and/or the live DOM, not just the working copy.
+
+2. DB CHECK constraint. partner_profiles_communication_locale_check only allowed
+   ('en','es'); choosing FR/IT/PT/DE on /partner/settings threw
+   "violates check constraint". Fix (Supabase SQL): dropped + re-added the CHECK to
+   allow en,es,fr,it,pt,de. customer_profiles left at en,es by design (customer site
+   is EN/ES). LESSON: widening UI language options needs a matching DB constraint change.
+
+Section headings (Chat 53f): re-translated FR/IT/PT/DE section titles + names; clause/rule
+bodies left byte-identical. Old translation run validated JSON shape but not that text
+changed from English, so untranslated headings slipped through; new script rejects any
+heading identical to source and retries.
+
+Verified live via browser automation: /partner/operating-rules and /partner/account render
+German end-to-end for DE; /partner/settings saves Deutsch and persists across reload with
+no constraint error.
+
+Delivery note: long pastes corrupt. Multibyte UTF-8 mangles in terminal paste (use \u
+escapes / pure ASCII); even base64 took a homoglyph hit once and a dropped char once - gzip
++base64 shrinks payload and hard-fails on corruption. Backups this stretch: .chat53c/d/e/f.
