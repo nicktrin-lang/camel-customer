@@ -86,7 +86,7 @@ function toISOLocal(d: Date): string {
   return format(d, "yyyy-MM-dd'T'HH:mm");
 }
 
-function CompactLanguageToggle() {
+function LanguageBoxes({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useLanguage();
   const options: { code: Locale; label: string }[] = [
     { code: "en", label: "EN" },
@@ -96,41 +96,18 @@ function CompactLanguageToggle() {
     { code: "pt", label: "PT" },
     { code: "de", label: "DE" },
   ];
+  const pad = compact ? "px-2.5 py-1.5" : "px-4 py-2";
+  const gap = compact ? "gap-1" : "gap-2";
   return (
-    <select
-      aria-label="Language"
-      value={locale}
-      onChange={(e) => setLocale(e.target.value as Locale)}
-      className="border border-white/20 bg-transparent px-2 py-1.5 text-xs font-black text-white/80 hover:text-white focus:outline-none"
-    >
-      {options.map(({ code, label }) => (
-        <option key={code} value={code} className="text-black">
-          {label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function LanguageBoxes() {
-  const { locale, setLocale } = useLanguage();
-  const options: { code: Locale; label: string }[] = [
-    { code: "en", label: "EN" },
-    { code: "es", label: "ES" },
-    { code: "fr", label: "FR" },
-    { code: "it", label: "IT" },
-    { code: "pt", label: "PT" },
-    { code: "de", label: "DE" },
-  ];
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className={`flex items-center ${gap} flex-wrap`}>
       {options.map(({ code, label }) => (
         <button
           key={code}
           type="button"
           onClick={() => setLocale(code)}
           className={[
-            "px-4 py-2 text-xs font-black border transition-colors",
+            pad,
+            "text-xs font-black border transition-colors",
             locale === code
               ? "bg-[#ff7a00] text-white border-[#ff7a00]"
               : "text-white/60 border-white/20 hover:bg-white/10 hover:text-white",
@@ -457,7 +434,7 @@ function CustomerHome() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-3">
-            <CompactLanguageToggle />
+            <LanguageBoxes compact />
             {isLoggedIn ? (
               <>
                 <Link href="/book" className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
