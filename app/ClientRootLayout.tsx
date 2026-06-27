@@ -12,26 +12,33 @@ import ChatWidget from "@/app/components/ChatWidget";
 import { LanguageProvider, useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
-function CompactLanguageToggle() {
+function LanguageBoxes({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useLanguage();
   const options: { code: Locale; label: string }[] = [
     { code: "en", label: "EN" },
     { code: "es", label: "ES" },
+    { code: "fr", label: "FR" },
+    { code: "it", label: "IT" },
+    { code: "pt", label: "PT" },
+    { code: "de", label: "DE" },
   ];
+  const pad = compact ? "px-2.5 py-1.5" : "px-4 py-2";
+  const gap = compact ? "gap-1" : "gap-2";
   return (
-    <div className="flex items-center gap-0 border border-white/20 overflow-hidden">
-      {options.map(({ code, label }, i) => (
+    <div className={`flex items-center ${gap} flex-wrap`}>
+      {options.map(({ code, label }) => (
         <button
           key={code}
           type="button"
           onClick={() => setLocale(code)}
           className={[
-            "px-2 py-1.5 text-xs font-black transition-colors",
-            i < options.length - 1 ? "border-r border-white/20" : "",
+            pad,
+            "text-xs font-black border transition-colors",
             locale === code
-              ? "bg-[#ff7a00] text-white"
-              : "text-white/60 hover:bg-white/10 hover:text-white",
+              ? "bg-[#ff7a00] text-white border-[#ff7a00]"
+              : "text-white/60 border-white/20 hover:bg-white/10 hover:text-white",
           ].join(" ")}
+          aria-label={`Switch to ${label}`}
         >
           {label}
         </button>
@@ -158,7 +165,7 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
 
               {/* Desktop nav */}
               <nav className="hidden md:flex items-center gap-3">
-                <CompactLanguageToggle />
+                <LanguageBoxes compact />
                 {isCustomerLoggedIn ? (
                   <>
                     <Link href={newBookingHref} className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
@@ -195,9 +202,9 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
                 {burgerOpen && (
                   <div className="absolute top-[76px] left-0 right-0 bg-black border-t border-white/10 z-50 py-3 space-y-0">
                     {/* Language toggle row */}
-                    <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
-                      <span className="text-xs font-black uppercase tracking-widest text-white/40 mr-2">{t("nav.burger.menu")}</span>
-                      <CompactLanguageToggle />
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <span className="block text-xs font-black uppercase tracking-widest text-white/40 mb-2">{t("nav.language")}</span>
+                      <LanguageBoxes />
                     </div>
                     {isCustomerLoggedIn ? (
                       <>
