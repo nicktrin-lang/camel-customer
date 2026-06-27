@@ -447,5 +447,6 @@
   "account.vatDetails.billingAddressPlaceholder": "Il suo indirizzo di fatturazione completo",
   "account.vatDetails.taxId": "Codice fiscale / Partita IVA",
   "account.vatDetails.taxIdPlaceholder": "es. GB123456789, ES-B12345678, EIN 12-3456789",
-  "account.vatDetails.taxIdNote": "Inserisca il suo numero di partita IVA, NIF, EIN o equivalente identificativo fiscale per il suo paese. Lasci il campo vuoto se non applicabile."
+  "account.vatDetails.taxIdNote": "Inserisca il suo numero di partita IVA, NIF, EIN o equivalente identificativo fiscale per il suo paese. Lasci il campo vuoto se non applicabile.",
+  "nav.language": "Lingua"
 }

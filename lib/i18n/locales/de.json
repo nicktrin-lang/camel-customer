@@ -447,5 +447,6 @@
   "account.vatDetails.billingAddressPlaceholder": "Ihre vollständige Rechnungsadresse",
   "account.vatDetails.taxId": "Steuer-ID / USt-IdNr.",
   "account.vatDetails.taxIdPlaceholder": "z. B. GB123456789, ES-B12345678, EIN 12-3456789",
-  "account.vatDetails.taxIdNote": "Geben Sie Ihre USt-IdNr., NIF, EIN oder eine gleichwertige Steuerkennung für Ihr Land ein. Lassen Sie das Feld frei, falls nicht zutreffend."
+  "account.vatDetails.taxIdNote": "Geben Sie Ihre USt-IdNr., NIF, EIN oder eine gleichwertige Steuerkennung für Ihr Land ein. Lassen Sie das Feld frei, falls nicht zutreffend.",
+  "nav.language": "Sprache"
 }

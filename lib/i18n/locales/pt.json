@@ -447,5 +447,6 @@
   "account.vatDetails.billingAddressPlaceholder": "A sua morada de faturação completa",
   "account.vatDetails.taxId": "NIF / Número de IVA",
   "account.vatDetails.taxIdPlaceholder": "ex.: GB123456789, ES-B12345678, EIN 12-3456789",
-  "account.vatDetails.taxIdNote": "Introduza o seu número de IVA, NIF, EIN ou identificador fiscal equivalente do seu país. Deixe em branco se não aplicável."
+  "account.vatDetails.taxIdNote": "Introduza o seu número de IVA, NIF, EIN ou identificador fiscal equivalente do seu país. Deixe em branco se não aplicável.",
+  "nav.language": "Idioma"
 }

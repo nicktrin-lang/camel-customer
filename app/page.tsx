@@ -112,6 +112,38 @@ function CompactLanguageToggle() {
   );
 }
 
+function LanguageBoxes() {
+  const { locale, setLocale } = useLanguage();
+  const options: { code: Locale; label: string }[] = [
+    { code: "en", label: "EN" },
+    { code: "es", label: "ES" },
+    { code: "fr", label: "FR" },
+    { code: "it", label: "IT" },
+    { code: "pt", label: "PT" },
+    { code: "de", label: "DE" },
+  ];
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {options.map(({ code, label }) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLocale(code)}
+          className={[
+            "px-4 py-2 text-xs font-black border transition-colors",
+            locale === code
+              ? "bg-[#ff7a00] text-white border-[#ff7a00]"
+              : "text-white/60 border-white/20 hover:bg-white/10 hover:text-white",
+          ].join(" ")}
+          aria-label={`Switch to ${label}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Preserve a house number the customer typed (e.g. "15 Sheering Lower Road") when the
 // geocoder only returns the street. Prepends the typed number unless the chosen address
 // already starts with it. Safe for alphanumeric numbers like "221b"; if the customer
@@ -460,9 +492,9 @@ function CustomerHome() {
             {/* Dropdown */}
             {burgerOpen && (
               <div className="absolute top-[68px] left-0 right-0 bg-black border-t border-white/10 z-50 py-3 space-y-0">
-                <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
-                  <span className="text-xs font-black uppercase tracking-widest text-white/40 mr-2">{t("nav.burger.menu")}</span>
-                  <CompactLanguageToggle />
+                <div className="px-4 py-3 border-b border-white/10">
+                  <span className="block text-xs font-black uppercase tracking-widest text-white/40 mb-2">{t("nav.language")}</span>
+                  <LanguageBoxes />
                 </div>
                 {isLoggedIn ? (
                   <>
