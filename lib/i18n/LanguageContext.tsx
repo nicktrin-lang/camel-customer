@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type Locale = "en" | "es";
+export type Locale = "en" | "es" | "fr" | "it" | "pt" | "de";
+
+const SUPPORTED: Locale[] = ["en", "es", "fr", "it", "pt", "de"];
 
 type LanguageContextType = {
   locale: Locale;
@@ -17,7 +19,7 @@ const LanguageContext = createContext<LanguageContextType>({
 function detectLocale(): Locale {
   try {
     const stored = localStorage.getItem("camel_locale");
-    if (stored === "en" || stored === "es") return stored;
+    if (stored && (SUPPORTED as string[]).includes(stored)) return stored as Locale;
   } catch {}
 
   try {
@@ -27,6 +29,10 @@ function detectLocale(): Locale {
     for (const lang of langs) {
       const code = lang.toLowerCase();
       if (code.startsWith("es")) return "es";
+      if (code.startsWith("fr")) return "fr";
+      if (code.startsWith("it")) return "it";
+      if (code.startsWith("pt")) return "pt";
+      if (code.startsWith("de")) return "de";
       if (code.startsWith("en")) return "en";
     }
   } catch {}

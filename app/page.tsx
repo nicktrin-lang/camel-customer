@@ -91,26 +91,24 @@ function CompactLanguageToggle() {
   const options: { code: Locale; label: string }[] = [
     { code: "en", label: "EN" },
     { code: "es", label: "ES" },
+    { code: "fr", label: "FR" },
+    { code: "it", label: "IT" },
+    { code: "pt", label: "PT" },
+    { code: "de", label: "DE" },
   ];
   return (
-    <div className="flex items-center gap-0 border border-white/20 overflow-hidden">
-      {options.map(({ code, label }, i) => (
-        <button
-          key={code}
-          type="button"
-          onClick={() => setLocale(code)}
-          className={[
-            "px-2 py-1.5 text-xs font-black transition-colors",
-            i < options.length - 1 ? "border-r border-white/20" : "",
-            locale === code
-              ? "bg-[#ff7a00] text-white"
-              : "text-white/60 hover:bg-white/10 hover:text-white",
-          ].join(" ")}
-        >
+    <select
+      aria-label="Language"
+      value={locale}
+      onChange={(e) => setLocale(e.target.value as Locale)}
+      className="border border-white/20 bg-transparent px-2 py-1.5 text-xs font-black text-white/80 hover:text-white focus:outline-none"
+    >
+      {options.map(({ code, label }) => (
+        <option key={code} value={code} className="text-black">
           {label}
-        </button>
+        </option>
       ))}
-    </div>
+    </select>
   );
 }
 
@@ -988,7 +986,7 @@ function PartnerMarketingHome() {
             <div className="logo-wrap"><a href="#top" className="logo-link" onClick={closeMobileNavIfOpen}><img src="/camel-logo.png" alt="Camel Global Ltd logo" /></a></div>
             <div className="nav-right">
               <select className="lang-select" aria-label="Language" value={lang} onChange={e=>{setLanguage(e.target.value as Lang);closeMobileNavIfOpen();}}>
-                <option value="en">EN</option><option value="es">ES</option><option value="it">IT</option><option value="fr">FR</option><option value="de">DE</option>
+                <option value="en">EN</option><option value="es">ES</option><option value="it">IT</option><option value="pt">PT</option><option value="fr">FR</option><option value="de">DE</option>
               </select>
               <button className="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" onClick={toggleMobileNav}>
                 <span className="nav-toggle-box"><span className="nav-toggle-line"/><span className="nav-toggle-line"/><span className="nav-toggle-line"/></span>
