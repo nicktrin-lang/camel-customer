@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 
 type Msg = { role: "user" | "assistant"; content: string };
-type Locale = "en" | "es";
+type Locale = "en" | "es" | "fr" | "it" | "pt" | "de";
 
 const STRINGS: Record<Locale, {
   suggestions: string[];
@@ -53,6 +53,78 @@ const STRINGS: Record<Locale, {
     placeholder: "Escribe un mensaje…",
     errorFailed: "No se pudo obtener una respuesta.",
     errorGeneric: "Algo salió mal. Por favor, inténtalo de nuevo.",
+  },
+  fr: {
+    suggestions: [
+      "Où est mon chauffeur ?",
+      "Quel est le statut de ma réservation ?",
+      "Comment fonctionne le dépôt de carburant ?",
+      "Comment annuler une réservation ?",
+    ],
+    welcome: "👋 Bonjour ! Je suis Camel Help. Je peux répondre à vos questions sur vos réservations, les détails de votre chauffeur, les dépôts de carburant, et bien plus encore. Comment puis-je vous aider ?",
+    endChat: "Terminer le chat",
+    sendingTranscript: "Envoi de la transcription…",
+    endedTranscript: "✅ Chat terminé. Une transcription vous a été envoyée par e-mail.",
+    endedNoTranscript: "Chat terminé.",
+    startNew: "Démarrer un nouveau chat",
+    subtitle: "Assistant AI · généralement instantané",
+    placeholder: "Écrivez un message…",
+    errorFailed: "Impossible d'obtenir une réponse.",
+    errorGeneric: "Une erreur s'est produite. Veuillez réessayer.",
+  },
+  it: {
+    suggestions: [
+      "Dov'è il mio autista?",
+      "Qual è lo stato della mia prenotazione?",
+      "Come funziona il deposito carburante?",
+      "Come posso cancellare una prenotazione?",
+    ],
+    welcome: "👋 Ciao! Sono Camel Help. Posso rispondere a domande sulle tue prenotazioni, i dettagli dell'autista, i depositi carburante e altro ancora. Come posso aiutarti?",
+    endChat: "Termina chat",
+    sendingTranscript: "Invio trascrizione…",
+    endedTranscript: "✅ Chat terminata. Ti abbiamo inviato una trascrizione via email.",
+    endedNoTranscript: "Chat terminata.",
+    startNew: "Inizia una nuova chat",
+    subtitle: "AI assistant · di solito istantaneo",
+    placeholder: "Scrivi un messaggio…",
+    errorFailed: "Impossibile ottenere una risposta.",
+    errorGeneric: "Qualcosa è andato storto. Riprova.",
+  },
+  pt: {
+    suggestions: [
+      "Onde está o meu motorista?",
+      "Qual é o estado da minha reserva?",
+      "Como funciona o depósito de combustível?",
+      "Como cancelo uma reserva?",
+    ],
+    welcome: "👋 Olá! Sou o Camel Help. Posso responder a perguntas sobre as suas reservas, detalhes do motorista, depósitos de combustível e muito mais. Em que posso ajudar?",
+    endChat: "Terminar conversa",
+    sendingTranscript: "A enviar transcrição…",
+    endedTranscript: "✅ Conversa terminada. Foi-lhe enviada uma transcrição por e-mail.",
+    endedNoTranscript: "Conversa terminada.",
+    startNew: "Iniciar nova conversa",
+    subtitle: "AI assistant · normalmente imediato",
+    placeholder: "Escreva uma mensagem…",
+    errorFailed: "Não foi possível obter uma resposta.",
+    errorGeneric: "Ocorreu um erro. Por favor, tente novamente.",
+  },
+  de: {
+    suggestions: [
+      "Wo ist mein Fahrer?",
+      "Was ist mein Buchungsstatus?",
+      "Wie funktioniert die Kraftstoffkaution?",
+      "Wie kann ich eine Buchung stornieren?",
+    ],
+    welcome: "👋 Hallo! Ich bin Camel Help. Ich beantworte Ihre Fragen zu Buchungen, Fahrerdetails, Kraftstoffkautionen und mehr. Wie kann ich Ihnen helfen?",
+    endChat: "Chat beenden",
+    sendingTranscript: "Transkript wird gesendet…",
+    endedTranscript: "✅ Chat beendet. Ein Transkript wurde Ihnen per E-Mail zugeschickt.",
+    endedNoTranscript: "Chat beendet.",
+    startNew: "Neuen Chat starten",
+    subtitle: "AI-Assistent · meist sofort",
+    placeholder: "Nachricht eingeben…",
+    errorFailed: "Antwort konnte nicht abgerufen werden.",
+    errorGeneric: "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
   },
 };
 

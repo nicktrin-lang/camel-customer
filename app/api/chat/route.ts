@@ -47,7 +47,13 @@ export async function POST(req: Request) {
 
     // Fetch customer's recent requests + bookings
     const db = createServiceRoleSupabaseClient();
-    const locale = body?.locale === "es" ? "es" : "en";
+    const SUPPORTED_LOCALES = ["en", "es", "fr", "it", "pt", "de"];
+    const locale = SUPPORTED_LOCALES.includes(body?.locale) ? body.locale : "en";
+    const LANG_NAMES: Record<string, string> = {
+      en: "English", es: "Spanish (Espanol)", fr: "French (Francais)",
+      it: "Italian (Italiano)", pt: "Portuguese (Portugues)", de: "German (Deutsch)",
+    };
+    const langName = LANG_NAMES[locale] || "English";
     const { data: requests } = await db
       .from("customer_requests")
       .select("id, job_number, pickup_address, dropoff_address, pickup_at, dropoff_at, status, vehicle_category_name, passengers, notes, created_at")
@@ -139,7 +145,7 @@ export async function POST(req: Request) {
 
     const customerName = String(user.user_metadata?.full_name || user.email || "the customer").split("@")[0];
 
-    const systemPrompt = `CRITICAL: You must respond ONLY in ${locale === "es" ? "Spanish" : "English"}. This is mandatory and overrides everything else.
+    const systemPrompt = `CRITICAL: You must respond ONLY in ${langName}. This is mandatory and overrides everything else.
 
 You are Camel Help, the friendly AI assistant for Camel Global — a meet & greet car hire platform operating in Spain.
 
@@ -178,7 +184,7 @@ ${bookingContext}
 
 Keep responses short and helpful. If a customer is frustrated, be empathetic. Never invent data — only share what is in the booking data above.
 
-CRITICAL INSTRUCTION: You MUST reply ONLY in ${locale === "es" ? "Spanish (Español)" : "English"}. Never switch languages regardless of what language the user writes in.`;
+CRITICAL INSTRUCTION: You MUST reply ONLY in ${langName}. Never switch languages regardless of what language the user writes in.`;
 
     // Call Anthropic API with streaming
     const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
