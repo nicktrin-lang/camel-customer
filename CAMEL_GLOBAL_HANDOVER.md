@@ -794,3 +794,90 @@ Remaining / verify:
   confirmation, confirm email arrives German + PDF English.
 - Other logged-in pages with bespoke headers (bookings/[id], checkout) not individually audited —
   most inherit ClientRootLayout so should be covered; spot-check if EN/ES appears anywhere.
+
+
+---
+
+### Chat 55 — Full email localization + new-request partner alert + UI language fixes [Jun 27]
+Two repos touched. Stable rollback tags: `v-stable-chat55` on BOTH camel-portal and camel-customer.
+
+**Customer-repo UI fixes (camel-customer)**
+- `app/account/page.tsx` — email-language picker was hardcoded EN/ES; now shows all 6
+  (en,es,fr,it,pt,de) via an EMAIL_LANGS array + EmailLocale type. DB constraint was already
+  widened to 6 in Chat 54, so this was pure UI.
+- `app/checkout/[bid_id]/page.tsx` — checkout renders its OWN nav (the global header in
+  ClientRootLayout is suppressed on /checkout via `!isCheckoutPage`), so it had NO language
+  switcher. Added a CheckoutNav: desktop inline 6-box switcher + mobile burger dropdown with a
+  LANGUAGE row, byte-matching the global LanguageBoxes style. Reads useLanguage() from the same
+  LanguageProvider, so it drives whole-app locale. Logo kept non-link (no abandonment path mid-pay).
+
+**New feature — partners alerted to new requests (camel-customer)**
+- Symptom: customer posts a request, in-radius car-hire companies were never emailed to bid.
+  There was NO partner-alert email anywhere in either repo — never built.
+- `lib/email.ts` (customer) — added `sendPartnerNewRequestEmail(to, {jobNumber, vehicleCategory,
+  pickupArea, expiresAt, locale})`, 6-locale + EN fallback, links to PORTAL /partner/requests,
+  shows request#/vehicle/pickup area/"respond before" deadline (formatted per locale). Also
+  exported `Locale` + `coerceLocale()` (were previously un-exported).
+- `app/api/test-booking/requests/route.ts` — the geo+fleet match already existed (haversine vs
+  base_lat/base_lng + service_radius_km, fleet category/capacity) and wrote request_partner_matches,
+  but never emailed. Now:
+    1. added communication_locale to the partner_profiles select;
+    2. after the match loop, looks up partner_applications for the matched user_ids and keeps ONLY
+       status==='live' (partner_applications.email is the contact address);
+    3. the LIVE set drives BOTH the match-rows insert AND the emails — so non-live partners are
+       neither matched nor emailed (BEHAVIOUR CHANGE: previously approved-not-live in-range partners
+       got match rows; now they don't);
+    4. emails the live set via Promise.allSettled (non-blocking — a mail failure never fails
+       request creation). One email per partner (eligiblePartners map dedupes by user_id).
+  - "Live" = partner_applications.status === 'live' (set by refreshPartnerLiveStatus / make-live).
+  - GOTCHA: a live partner with null base_lat/base_lng or service_radius_km silently never matches
+    (loop skips null coords). SQL to audit:
+    SELECT pa.company_name, pa.status, pa.email, pp.communication_locale, pp.base_lat, pp.base_lng,
+           pp.service_radius_km
+    FROM partner_applications pa JOIN partner_profiles pp ON pp.user_id = pa.user_id
+    WHERE pa.status = 'live';
+
+**Full email localization — every notification now honours communication_locale (camel-portal)**
+Root problem (same shape as the bid-email bug): locale lookups collapsed `de→en` via
+`=== "es" ? "es" : "en"`, and several emails had NO fr/it/pt/de branch at all. Fixed across:
+- `lib/email.ts` (portal) — brandEmail + all 7 senders widened to EmailLocale (6) with per-locale
+  subject/heading/body maps + EN fallback. Exported `EmailLocale` type + `coerceEmailLocale()` for
+  routes/crons to reuse. Default stays "en" so it's backward-compatible. "Meet & Greet Car Hire"
+  tagline stays English (brand). Tag commit shipped first (fixed bid email — confirmed German).
+- Locale lookups changed from the es/en collapse to `coerceEmailLocale(...)` (real 6, EN fallback) in:
+  - app/api/partner/bids/route.ts (customer bid-received)
+  - app/api/admin/applications/make-live/route.ts (account-live)
+  - app/api/admin/applications/update-status/route.ts (approval + rejection)
+  - app/api/admin/applications/resend-approval/route.ts (approval resend)
+  - app/api/cron/onboarding-reminder/route.ts (approval reminder)
+  - app/api/cron/review-reminder/route.ts (customer review reminder)
+- Bespoke inline-HTML emails (had hardcoded es?ES:EN, no other langs) rewritten to 6-locale string
+  maps with EN fallback; their attached PDFs STAY ENGLISH (NTUK rule):
+  - lib/portal/completeBooking.tsx — customer + partner COMPLETION emails refactored into
+    buildCustomerCompletionEmail / buildPartnerCompletionEmail; the 2 locale lookups (partner ~441,
+    customer ~452) now coerceEmailLocale. Stripe transfer-reversal/refund + StatementDocument PDF
+    UNCHANGED. Fuel level VALUES (fuelLabel/QUARTER_LABELS → "½ Tank") stay English in all locales
+    (matches prior ES behaviour); only labels/prose localized.
+  - app/api/admin/bookings/[id]/post-refund/route.ts — customer refund email → 6-locale; Stripe
+    reversal/refund + cap check + amended PDF UNCHANGED.
+  - app/api/admin/bookings/[id]/resend-statement/route.ts — customer statement email (normal +
+    amended) → 6-locale; PDF UNCHANGED.
+- DELIBERATELY left English: invoice-data/route.ts:45 (feeds the Invoice Data PDF, not an email —
+  PDF stays English); all internal [Admin] notification emails (internal audience).
+
+**Method / lessons this session**
+- Every file delivered as a download + tsc-verified (standalone or stubbed) before deploy — incl.
+  JSX stub-tsc for completeBooking.tsx and react-pdf/Stripe/Supabase stubs. Stub-induced false
+  errors (e.g. db typed `any` → Map value `{}`, NextRequest missing .json) were confirmed by
+  running the ORIGINAL file under the same stub.
+- I cannot run the repo's Python translation script (ANTHROPIC_API_KEY only in user's .env.local),
+  so the FR/IT/PT/DE email strings were written directly (finite set), placeholders/${...} preserved.
+- macOS gotcha: `~/Downloads` had com.apple.macl/provenance xattrs → `cp`/`cat <` from Downloads
+  hit "Operation not permitted"; `cat src > dest` TRUNCATES dest even when the read fails (clobbered
+  lib/email.ts once — restored via `git checkout HEAD -- lib/email.ts`). Fix: grant terminal
+  Downloads/Full-Disk access in System Settings, or drag files via Finder. Never paste a line
+  starting with `#` into zsh (it errors and can eat the next command / leave a quote> prompt).
+
+Stable tags: v-stable-chat55 (camel-portal AND camel-customer).
+
+
