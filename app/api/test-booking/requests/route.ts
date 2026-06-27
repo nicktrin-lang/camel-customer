@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
+import { sendPartnerNewRequestEmail, coerceLocale } from "@/lib/email";
 
 function getBearerToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -161,7 +162,7 @@ export async function POST(req: Request) {
     if (partnerUserIds.length > 0) {
       const { data: profileRows, error: profileErr } = await db
         .from("partner_profiles")
-        .select(`user_id, company_name, role, base_lat, base_lng, service_radius_km`)
+        .select(`user_id, company_name, role, base_lat, base_lng, service_radius_km, communication_locale`)
         .in("user_id", partnerUserIds);
       if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 });
       partnerProfileMap = new Map((profileRows||[]).map((r:any) => [String(r.user_id), r]));
@@ -194,13 +195,62 @@ export async function POST(req: Request) {
       }
     }
 
-    const matchRows = Array.from(eligiblePartners.entries()).map(([partner_user_id, meta]) => ({
-      request_id: requestRow.id, partner_user_id, matched_fleet_id: meta.fleet_id, match_status: "open",
-    }));
+    // ── Restrict to LIVE partners only ────────────────────────────────────
+    // A partner is "live" when partner_applications.status === "live" (set by
+    // refreshPartnerLiveStatus / make-live). Only live partners are matched to
+    // — and emailed about — a new request. partner_applications also holds the
+    // partner's contact email.
+    const eligibleIds = Array.from(eligiblePartners.keys());
+    const liveAppMap = new Map<string, { email: string | null }>();
+
+    if (eligibleIds.length > 0) {
+      const { data: appRows, error: appErr } = await db
+        .from("partner_applications")
+        .select(`user_id, email, status`)
+        .in("user_id", eligibleIds);
+      if (appErr) return NextResponse.json({ error: appErr.message }, { status: 400 });
+      for (const a of appRows || []) {
+        if (String(a.status || "").trim().toLowerCase() === "live") {
+          liveAppMap.set(String(a.user_id), { email: a.email ?? null });
+        }
+      }
+    }
+
+    const livePartnerIds = eligibleIds.filter((id) => liveAppMap.has(id));
+
+    const matchRows = livePartnerIds.map((partner_user_id) => {
+      const meta = eligiblePartners.get(partner_user_id)!;
+      return { request_id: requestRow.id, partner_user_id, matched_fleet_id: meta.fleet_id, match_status: "open" };
+    });
 
     if (matchRows.length > 0) {
       const { error: matchErr } = await db.from("request_partner_matches").insert(matchRows);
       if (matchErr) return NextResponse.json({ error: matchErr.message }, { status: 400 });
+    }
+
+    // ── Email live matched partners (non-blocking) ────────────────────────
+    // A mail failure must never fail request creation, so each send is
+    // independent and errors are swallowed/logged via allSettled.
+    if (livePartnerIds.length > 0) {
+      try {
+        await Promise.allSettled(
+          livePartnerIds.map(async (partner_user_id) => {
+            const toEmail = String(liveAppMap.get(partner_user_id)?.email || "").trim();
+            if (!toEmail) return;
+            const profile = partnerProfileMap.get(partner_user_id);
+            const locale  = coerceLocale(profile?.communication_locale);
+            await sendPartnerNewRequestEmail(toEmail, {
+              jobNumber:       requestRow.job_number ?? null,
+              vehicleCategory: vehicle_category_name || null,
+              pickupArea:      pickup_address || null,
+              expiresAt:       requestRow.expires_at ?? expires_at ?? null,
+              locale,
+            });
+          })
+        );
+      } catch (e: any) {
+        console.error("New-request partner email batch failed:", e?.message);
+      }
     }
 
     return NextResponse.json({

@@ -71,7 +71,13 @@ export async function sendEmail({
 // Shared brand email wrapper — mirrors portal pattern exactly
 // ---------------------------------------------------------------------------
 
-type Locale = "en" | "es" | "fr" | "it" | "pt" | "de";
+export type Locale = "en" | "es" | "fr" | "it" | "pt" | "de";
+
+const LOCALES: Locale[] = ["en", "es", "fr", "it", "pt", "de"];
+
+export function coerceLocale(v: unknown): Locale {
+  return typeof v === "string" && (LOCALES as string[]).includes(v) ? (v as Locale) : "en";
+}
 
 const SIG: Record<Locale, { regards: string; team: string }> = {
   en: { regards: "Best regards,", team: "The Camel Global Team" },
@@ -185,6 +191,111 @@ export async function sendReviewReminderEmail(
   return sendEmail({
     to,
     subject: (subjects[locale] ?? subjects.en) + sfx(suffixes[locale] ?? suffixes.en),
+    html: brandEmail(headings, bodies, locale),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Partner emails — localized to the partner's communication_locale
+// ---------------------------------------------------------------------------
+
+// Sent to LIVE partners within radius when a matching customer request is created.
+// Links to the portal so the partner can review the request and submit a bid.
+export async function sendPartnerNewRequestEmail(
+  to: string,
+  opts: {
+    jobNumber?: number | null;
+    vehicleCategory?: string | null;
+    pickupArea?: string | null;
+    expiresAt?: string | null;
+    locale?: Locale;
+  } = {}
+) {
+  const { jobNumber, vehicleCategory, pickupArea, expiresAt } = opts;
+  const locale = opts.locale ?? "en";
+
+  const portalUrl   = process.env.PORTAL_BASE_URL || "https://portal.camel-global.com";
+  const requestsUrl = `${portalUrl}/partner/requests`;
+  const vehicle = vehicleCategory ? String(vehicleCategory) : "—";
+  const pickup  = pickupArea ? String(pickupArea) : "—";
+
+  const dtLocale: Record<Locale, string> = { en: "en-GB", es: "es-ES", fr: "fr-FR", it: "it-IT", pt: "pt-PT", de: "de-DE" };
+  const fmtDeadline = (L: Locale): string => {
+    if (!expiresAt) return "—";
+    try {
+      return new Intl.DateTimeFormat(dtLocale[L] ?? "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(expiresAt));
+    } catch {
+      return "—";
+    }
+  };
+
+  const subjectsBase: Record<Locale, string> = {
+    en: "New booking request in your area",
+    es: "Nueva solicitud de reserva en tu zona",
+    fr: "Nouvelle demande de réservation dans votre secteur",
+    it: "Nuova richiesta di prenotazione nella tua zona",
+    pt: "Novo pedido de reserva na sua zona",
+    de: "Neue Buchungsanfrage in Ihrer Umgebung",
+  };
+
+  const headings: Record<Locale, string> = {
+    en: "New booking request ⭐",
+    es: "Nueva solicitud de reserva ⭐",
+    fr: "Nouvelle demande de réservation ⭐",
+    it: "Nuova richiesta di prenotazione ⭐",
+    pt: "Novo pedido de reserva ⭐",
+    de: "Neue Buchungsanfrage ⭐",
+  };
+
+  const greet: Record<Locale, string> = {
+    en: "Hello,", es: "Hola,", fr: "Bonjour,", it: "Salve,", pt: "Olá,", de: "Hallo,",
+  };
+
+  const intro: Record<Locale, string> = {
+    en: "A new customer booking request matches your fleet and service area. Log in to review the details and submit your bid before it expires.",
+    es: "Una nueva solicitud de reserva de un cliente coincide con tu flota y tu zona de servicio. Inicia sesión para revisar los detalles y enviar tu oferta antes de que expire.",
+    fr: "Une nouvelle demande de réservation correspond à votre flotte et à votre zone de service. Connectez-vous pour consulter les détails et soumettre votre offre avant son expiration.",
+    it: "Una nuova richiesta di prenotazione corrisponde alla tua flotta e alla tua zona di servizio. Accedi per consultare i dettagli e inviare la tua offerta prima che scada.",
+    pt: "Um novo pedido de reserva corresponde à sua frota e à sua zona de serviço. Inicie sessão para consultar os detalhes e enviar a sua proposta antes que expire.",
+    de: "Eine neue Buchungsanfrage passt zu Ihrer Flotte und Ihrem Servicebereich. Melden Sie sich an, um die Details zu prüfen und Ihr Angebot abzugeben, bevor sie abläuft.",
+  };
+
+  const lblRequest:  Record<Locale, string> = { en: "Request",     es: "Solicitud",         fr: "Demande",                  it: "Richiesta",       pt: "Pedido",            de: "Anfrage" };
+  const lblVehicle:  Record<Locale, string> = { en: "Vehicle",     es: "Vehículo",          fr: "Véhicule",                 it: "Veicolo",         pt: "Veículo",           de: "Fahrzeug" };
+  const lblPickup:   Record<Locale, string> = { en: "Pickup area", es: "Zona de recogida",  fr: "Zone de prise en charge",  it: "Zona di ritiro",  pt: "Zona de recolha",   de: "Abholbereich" };
+  const lblDeadline: Record<Locale, string> = { en: "Respond before", es: "Responde antes del", fr: "Répondez avant le",    it: "Rispondi entro",  pt: "Responda antes de", de: "Antworten bis" };
+
+  const cta: Record<Locale, string> = {
+    en: "View request & bid",
+    es: "Ver solicitud y ofertar",
+    fr: "Voir la demande et faire une offre",
+    it: "Visualizza la richiesta e fai un'offerta",
+    pt: "Ver pedido e licitar",
+    de: "Anfrage ansehen & Angebot abgeben",
+  };
+
+  const bodies = Object.fromEntries(
+    LOCALES.map((L) => {
+      const rows = `
+    <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;">
+      <tr><td style="padding:6px 0; color:#666;">${lblRequest[L]}</td><td style="padding:6px 0; text-align:right; font-weight:700;">${jobNumber ? `#${jobNumber}` : "—"}</td></tr>
+      <tr><td style="padding:6px 0; color:#666;">${lblVehicle[L]}</td><td style="padding:6px 0; text-align:right; font-weight:700;">${vehicle}</td></tr>
+      <tr><td style="padding:6px 0; color:#666;">${lblPickup[L]}</td><td style="padding:6px 0; text-align:right; font-weight:700;">${pickup}</td></tr>
+      <tr><td style="padding:6px 0; color:#666;">${lblDeadline[L]}</td><td style="padding:6px 0; text-align:right; font-weight:700;">${fmtDeadline(L)}</td></tr>
+    </table>`;
+      return [L, `
+    <p>${greet[L]}</p>
+    <p>${intro[L]}</p>
+    ${rows}
+    <p style="margin:24px 0;">
+      <a href="${requestsUrl}" style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">${cta[L]}</a>
+    </p>`];
+    })
+  ) as Record<Locale, string>;
+
+  return sendEmail({
+    to,
+    subject: (subjectsBase[locale] ?? subjectsBase.en) + (jobNumber ? ` — #${jobNumber}` : ""),
     html: brandEmail(headings, bodies, locale),
   });
 }
