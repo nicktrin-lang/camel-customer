@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+import { useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -26,6 +27,104 @@ const LOCALE_MAP: Record<string, string> = { EUR: "es-ES", GBP: "en-GB", USD: "e
 function fmtCurr(amount: number, currency: string) {
   const curr = currency.toUpperCase();
   return new Intl.NumberFormat(LOCALE_MAP[curr] || "en-GB", { style: "currency", currency: curr }).format(amount);
+}
+
+// Language boxes — same component shape/classes as LanguageBoxes in ClientRootLayout,
+// so the buttons are visually identical to the rest of the site.
+function CheckoutLangSwitch({ compact = false }: { compact?: boolean }) {
+  const { locale, setLocale } = useLanguage();
+  const options: { code: Locale; label: string }[] = [
+    { code: "en", label: "EN" },
+    { code: "es", label: "ES" },
+    { code: "fr", label: "FR" },
+    { code: "it", label: "IT" },
+    { code: "pt", label: "PT" },
+    { code: "de", label: "DE" },
+  ];
+  const pad = compact ? "px-2.5 py-1.5" : "px-4 py-2";
+  const gap = compact ? "gap-1" : "gap-2";
+  return (
+    <div className={`flex items-center ${gap} flex-wrap`}>
+      {options.map(({ code, label }) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLocale(code)}
+          className={[
+            pad,
+            "text-xs font-black border transition-colors",
+            locale === code
+              ? "bg-[#ff7a00] text-white border-[#ff7a00]"
+              : "text-white/60 border-white/20 hover:bg-white/10 hover:text-white",
+          ].join(" ")}
+          aria-label={`Switch to ${label}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Checkout's own nav. The global header in ClientRootLayout is suppressed on
+// /checkout, so this nav reproduces the site-wide pattern: desktop inline
+// switcher, mobile burger dropdown with a LANGUAGE row.
+function CheckoutNav() {
+  const { t } = useTranslation();
+  const [burgerOpen, setBurgerOpen] = useState(false);
+  const burgerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!burgerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (burgerRef.current && !burgerRef.current.contains(e.target as Node)) {
+        setBurgerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [burgerOpen]);
+
+  return (
+    <nav className="relative w-full bg-black px-4 py-2.5 flex items-center justify-between">
+      {/* Logo — non-link on checkout to avoid an abandonment path mid-payment */}
+      <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert shrink-0" />
+
+      {/* Desktop */}
+      <div className="hidden md:flex items-center gap-3">
+        <CheckoutLangSwitch compact />
+        <Link href="/bookings" className="text-sm font-black text-white/60 hover:text-white">{t("common.myBookings")}</Link>
+      </div>
+
+      {/* Mobile burger */}
+      <div className="flex md:hidden items-center gap-2" ref={burgerRef}>
+        <button
+          type="button"
+          onClick={() => setBurgerOpen(o => !o)}
+          aria-label={t("nav.burger.menu")}
+          className="flex flex-col justify-center items-center w-10 h-10 gap-1.5 border border-white/20 hover:bg-white/10 transition-colors"
+        >
+          <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "rotate-45 translate-y-2" : ""}`} />
+          <span className={`block h-0.5 w-5 bg-white transition-opacity ${burgerOpen ? "opacity-0" : ""}`} />
+          <span className={`block h-0.5 w-5 bg-white transition-transform ${burgerOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+        </button>
+
+        {/* Dropdown */}
+        {burgerOpen && (
+          <div className="absolute top-full left-0 right-0 bg-black border-t border-white/10 z-50 py-3 space-y-0">
+            {/* Language toggle row */}
+            <div className="px-4 py-3 border-b border-white/10">
+              <span className="block text-xs font-black uppercase tracking-widest text-white/40 mb-2">{t("nav.language")}</span>
+              <CheckoutLangSwitch />
+            </div>
+            <Link href="/bookings" className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors">
+              {t("common.myBookings")}
+            </Link>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
 }
 
 function CheckoutForm({ intent, requestId, onError }: {
@@ -175,9 +274,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
 
   if (loading) return (
     <div className="min-h-screen bg-white flex flex-col">
-      <nav className="w-full bg-black px-4 py-2.5 flex items-center">
-        <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
-      </nav>
+      <CheckoutNav />
       <div className="flex-1 flex items-center justify-center bg-[#f0f0f0]">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 rounded-full border-4 border-[#ff7a00] border-t-transparent animate-spin mx-auto" />
@@ -189,9 +286,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
 
   if (error) return (
     <div className="min-h-screen bg-white flex flex-col">
-      <nav className="w-full bg-black px-4 py-2.5 flex items-center">
-        <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
-      </nav>
+      <CheckoutNav />
       <div className="flex-1 flex items-center justify-center bg-[#f0f0f0] px-6">
         <div className="max-w-md w-full bg-white p-8 space-y-4">
           <p className="text-lg font-black text-red-700">{t("checkout.unavailable")}</p>
@@ -209,10 +304,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <nav className="w-full bg-black px-4 py-2.5 flex items-center justify-between">
-        <Image src="/camel-logo.png" alt="Camel Global" width={200} height={70} priority className="h-16 w-auto brightness-0 invert" />
-        <Link href="/bookings" className="text-sm font-black text-white/60 hover:text-white">{t("common.myBookings")}</Link>
-      </nav>
+      <CheckoutNav />
 
       <div className="w-full bg-black px-6 py-12 text-white">
         <div className="mx-auto max-w-2xl">
