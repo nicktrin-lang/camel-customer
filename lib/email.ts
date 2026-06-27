@@ -70,33 +70,34 @@ export async function sendEmail({
 // ---------------------------------------------------------------------------
 // Shared brand email wrapper — mirrors portal pattern exactly
 // ---------------------------------------------------------------------------
+
+type Locale = "en" | "es" | "fr" | "it" | "pt" | "de";
+
+const SIG: Record<Locale, { regards: string; team: string }> = {
+  en: { regards: "Best regards,", team: "The Camel Global Team" },
+  es: { regards: "Saludos,", team: "El equipo de Camel Global" },
+  fr: { regards: "Cordialement,", team: "L'équipe Camel Global" },
+  it: { regards: "Cordiali saluti,", team: "Il team di Camel Global" },
+  pt: { regards: "Com os melhores cumprimentos,", team: "A equipa Camel Global" },
+  de: { regards: "Mit freundlichen Grüßen,", team: "Das Camel Global Team" }
+};
+
 function brandEmail(
-  headingEN: string,
-  headingES: string | null,
-  bodyEN: string,
-  bodyES: string | null,
-  locale: "en" | "es"
+  headings: Record<Locale, string>,
+  bodies: Record<Locale, string>,
+  locale: Locale
 ): string {
-  if (locale === "es" && headingES && bodyES) {
-    return `
-      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
-        <div style="background:#000; padding:24px 32px;">
-          <h2 style="color:#fff; margin:0;">${headingES}</h2>
-        </div>
-        <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
-          ${bodyES}
-          <p style="margin-top:32px; color:#888; font-size:14px;">Saludos,<br/><strong style="color:#222;">El equipo de Camel Global</strong></p>
-        </div>
-      </div>`;
-  }
+  const heading = headings[locale] ?? headings.en;
+  const body = bodies[locale] ?? bodies.en;
+  const sig = SIG[locale] ?? SIG.en;
   return `
     <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
       <div style="background:#000; padding:24px 32px;">
-        <h2 style="color:#fff; margin:0;">${headingEN}</h2>
+        <h2 style="color:#fff; margin:0;">${heading}</h2>
       </div>
       <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
-        ${bodyEN}
-        <p style="margin-top:32px; color:#888; font-size:14px;">Best regards,<br/><strong style="color:#222;">The Camel Global Team</strong></p>
+        ${body}
+        <p style="margin-top:32px; color:#888; font-size:14px;">${sig.regards}<br/><strong style="color:#222;">${sig.team}</strong></p>
       </div>
     </div>`;
 }
@@ -109,74 +110,52 @@ function brandEmail(
 export async function sendCustomerBidReceivedEmail(
   to: string,
   jobNumber?: number | null,
-  locale: "en" | "es" = "en"
+  locale: Locale = "en"
 ) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
-
-  const subjectEN = `A new partner bid has been received${jobNumber ? ` for booking #${jobNumber}` : ""}`;
-  const subjectES = `Nueva oferta recibida${jobNumber ? ` para la reserva #${jobNumber}` : ""}`;
-
-  const bodyEN = `
-    <p>A partner has submitted a bid for your booking request${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""}.</p>
-    <p>You can now log in and review the bid details.</p>
+  const sfx = (s: string) => (jobNumber ? s.replace("{N}", String(jobNumber)) : "");
+  const job = jobNumber ? ` <strong>#${jobNumber}</strong>` : "";
+  const subjects: Record<Locale, string> = { en: "A new partner bid has been received", es: "Nueva oferta recibida", fr: "Une nouvelle offre partenaire a été reçue", it: "È stata ricevuta una nuova offerta da un partner", pt: "Foi recebida uma nova proposta de parceiro", de: "Ein neues Partnerangebot wurde eingereicht" };
+  const suffixes: Record<Locale, string> = { en: " for booking #{N}", es: " para la reserva #{N}", fr: " pour la réservation #{N}", it: " per la prenotazione #{N}", pt: " para a reserva #{N}", de: " für Buchung #{N}" };
+  const cta: Record<Locale, string> = { en: "View your bookings", es: "Ver tus reservas", fr: "Voir vos réservations", it: "Visualizza le tue prenotazioni", pt: "Ver as suas reservas", de: "Meine Buchungen anzeigen" };
+  const bodiesRaw: Record<Locale, string> = { en: "\n    <p>A partner has submitted a bid for your booking request{JOB}.</p>\n    <p>You can now log in and review the bid details.</p>", es: "\n    <p>Un socio ha enviado una oferta para tu solicitud de reserva{JOB}.</p>\n    <p>Ya puedes iniciar sesión y revisar los detalles de la oferta.</p>", fr: "\n    <p>Un partenaire a soumis une offre pour votre demande de réservation{JOB}.</p>\n    <p>Vous pouvez dès maintenant vous connecter et consulter les détails de l'offre.</p>", it: "\n    <p>Un partner ha inviato un'offerta per la tua richiesta di prenotazione{JOB}.</p>\n    <p>Puoi ora accedere al tuo account e consultare i dettagli dell'offerta.</p>", pt: "\n    <p>Um parceiro submeteu uma proposta para o seu pedido de reserva{JOB}.</p>\n    <p>Pode agora iniciar sessão e consultar os detalhes da proposta.</p>", de: "\n    <p>Ein Partner hat ein Angebot für Ihre Buchungsanfrage{JOB} eingereicht.</p>\n    <p>Sie können sich jetzt anmelden und die Angebotsdetails einsehen.</p>" };
+  const headings: Record<Locale, string> = { en: "New bid received", es: "Nueva oferta recibida", fr: "Nouvelle offre reçue", it: "Nuova offerta ricevuta", pt: "Nova proposta recebida", de: "Neues Angebot eingegangen" };
+  const bodies = Object.fromEntries(
+    (Object.keys(bodiesRaw) as Locale[]).map(L => [L, `${bodiesRaw[L].replace("{JOB}", job)}
     <p style="margin:24px 0;">
-      <a href="${baseUrl}/bookings"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        View your bookings
-      </a>
-    </p>`;
-
-  const bodyES = `
-    <p>Un socio ha enviado una oferta para tu solicitud de reserva${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""}.</p>
-    <p>Ya puedes iniciar sesión y revisar los detalles de la oferta.</p>
-    <p style="margin:24px 0;">
-      <a href="${baseUrl}/bookings"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        Ver tus reservas
-      </a>
-    </p>`;
-
+      <a href="${baseUrl}/bookings" style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">${cta[L] ?? cta.en}</a>
+    </p>`])
+  ) as Record<Locale, string>;
   return sendEmail({
     to,
-    subject: locale === "es" ? subjectES : subjectEN,
-    html: brandEmail("New bid received", "Nueva oferta recibida", bodyEN, bodyES, locale),
+    subject: (subjects[locale] ?? subjects.en) + sfx(suffixes[locale] ?? suffixes.en),
+    html: brandEmail(headings, bodies, locale),
   });
 }
 
 export async function sendCustomerBookingCompletedEmail(
   to: string,
   jobNumber?: number | null,
-  locale: "en" | "es" = "en"
+  locale: Locale = "en"
 ) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
-
-  const subjectEN = `Your booking is now completed${jobNumber ? ` — #${jobNumber}` : ""}`;
-  const subjectES = `Tu reserva ha sido completada${jobNumber ? ` — #${jobNumber}` : ""}`;
-
-  const bodyEN = `
-    <p>Your booking${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} has now been marked as completed.</p>
-    <p>The vehicle return has been confirmed. Your fuel deposit refund (if applicable) will be processed automatically within 5–10 working days.</p>
+  const sfx = (s: string) => (jobNumber ? s.replace("{N}", String(jobNumber)) : "");
+  const job = jobNumber ? ` <strong>#${jobNumber}</strong>` : "";
+  const subjects: Record<Locale, string> = { en: "Your booking is now completed", es: "Tu reserva ha sido completada", fr: "Votre réservation est maintenant finalisée", it: "La tua prenotazione è ora completata", pt: "A sua reserva foi concluída", de: "Ihre Buchung ist nun abgeschlossen" };
+  const suffixes: Record<Locale, string> = { en: " — #{N}", es: " — #{N}", fr: " — #{N}", it: " — #{N}", pt: " — #{N}", de: " — #{N}" };
+  const cta: Record<Locale, string> = { en: "View booking details", es: "Ver detalles de la reserva", fr: "Voir les détails de la réservation", it: "Visualizza i dettagli della prenotazione", pt: "Ver detalhes da reserva", de: "Buchungsdetails anzeigen" };
+  const bodiesRaw: Record<Locale, string> = { en: "\n    <p>Your booking{JOB} has now been marked as completed.</p>\n    <p>The vehicle return has been confirmed. Your fuel deposit refund (if applicable) will be processed automatically within 5–10 working days.</p>", es: "\n    <p>Tu reserva{JOB} ha sido marcada como completada.</p>\n    <p>Se ha confirmado la devolución del vehículo. El reembolso del depósito de combustible (si procede) se procesará automáticamente en 5–10 días laborables.</p>", fr: "\n    <p>Votre réservation{JOB} a été marquée comme finalisée.</p>\n    <p>Le retour du véhicule a été confirmé. Le remboursement de votre dépôt carburant (le cas échéant) sera traité automatiquement dans un délai de 5–10 jours ouvrés.</p>", it: "\n    <p>La tua prenotazione{JOB} è stata contrassegnata come completata.</p>\n    <p>La restituzione del veicolo è stata confermata. Il rimborso del deposito carburante (se applicabile) verrà elaborato automaticamente entro 5–10 giorni lavorativi.</p>", pt: "\n    <p>A sua reserva{JOB} foi marcada como concluída.</p>\n    <p>A devolução do veículo foi confirmada. O reembolso do depósito de combustível (se aplicável) será processado automaticamente dentro de 5–10 dias úteis.</p>", de: "\n    <p>Ihre Buchung{JOB} wurde als abgeschlossen markiert.</p>\n    <p>Die Fahrzeugrückgabe wurde bestätigt. Ihre Kraftstoffkautionserstattung (sofern zutreffend) wird automatisch innerhalb von 5–10 Werktagen bearbeitet.</p>" };
+  const headings: Record<Locale, string> = { en: "Booking completed", es: "Reserva completada", fr: "Réservation finalisée", it: "Prenotazione completata", pt: "Reserva concluída", de: "Buchung abgeschlossen" };
+  const bodies = Object.fromEntries(
+    (Object.keys(bodiesRaw) as Locale[]).map(L => [L, `${bodiesRaw[L].replace("{JOB}", job)}
     <p style="margin:24px 0;">
-      <a href="${baseUrl}/bookings"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        View booking details
-      </a>
-    </p>`;
-
-  const bodyES = `
-    <p>Tu reserva${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} ha sido marcada como completada.</p>
-    <p>Se ha confirmado la devolución del vehículo. El reembolso del depósito de combustible (si procede) se procesará automáticamente en 5–10 días laborables.</p>
-    <p style="margin:24px 0;">
-      <a href="${baseUrl}/bookings"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        Ver detalles de la reserva
-      </a>
-    </p>`;
-
+      <a href="${baseUrl}/bookings" style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">${cta[L] ?? cta.en}</a>
+    </p>`])
+  ) as Record<Locale, string>;
   return sendEmail({
     to,
-    subject: locale === "es" ? subjectES : subjectEN,
-    html: brandEmail("Booking completed", "Reserva completada", bodyEN, bodyES, locale),
+    subject: (subjects[locale] ?? subjects.en) + sfx(suffixes[locale] ?? suffixes.en),
+    html: brandEmail(headings, bodies, locale),
   });
 }
 
@@ -184,47 +163,28 @@ export async function sendReviewReminderEmail(
   to: string,
   jobNumber?: number | null,
   requestId?: string | null,
-  locale: "en" | "es" = "en"
+  locale: Locale = "en"
 ) {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.camel-global.com";
   const reviewUrl = requestId ? `${baseUrl}/bookings/${requestId}` : `${baseUrl}/bookings`;
-
-  const subjectEN = `How was your car hire experience?${jobNumber ? ` (Booking #${jobNumber})` : ""}`;
-  const subjectES = `¿Qué tal fue tu experiencia de alquiler?${jobNumber ? ` (Reserva #${jobNumber})` : ""}`;
-
-  const bodyEN = `
-    <p>Hi,</p>
-    <p>Your Camel Global car hire booking${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} is now complete. We'd love to hear how it went.</p>
-    <p>Your review helps other customers choose the right car hire company for their trip.</p>
+  const sfx = (s: string) => (jobNumber ? s.replace("{N}", String(jobNumber)) : "");
+  const job = jobNumber ? ` <strong>#${jobNumber}</strong>` : "";
+  const subjects: Record<Locale, string> = { en: "How was your car hire experience?", es: "¿Qué tal fue tu experiencia de alquiler?", fr: "Comment s'est passée votre location de voiture ?", it: "Com'è stata la tua esperienza di noleggio auto?", pt: "Como foi a sua experiência de aluguer de automóvel?", de: "Wie war Ihre Mietwagenerfahrung?" };
+  const suffixes: Record<Locale, string> = { en: " (Booking #{N})", es: " (Reserva #{N})", fr: " (Réservation #{N})", it: " (Prenotazione #{N})", pt: " (Reserva #{N})", de: " (Buchung #{N})" };
+  const cta: Record<Locale, string> = { en: "Leave a Review", es: "Dejar una reseña", fr: "Laisser un avis", it: "Lascia una recensione", pt: "Deixar uma Avaliação", de: "Bewertung abgeben" };
+  const footer: Record<Locale, string> = { en: "It only takes 30 seconds.", es: "Solo lleva 30 segundos.", fr: "Cela ne prend que 30 secondes.", it: "Bastano solo 30 secondi.", pt: "Demora apenas 30 segundos.", de: "Es dauert nur 30 Sekunden." };
+  const bodiesRaw: Record<Locale, string> = { en: "\n    <p>Hi,</p>\n    <p>Your Camel Global car hire booking{JOB} is now complete. We'd love to hear how it went.</p>\n    <p>Your review helps other customers choose the right car hire company for their trip.</p>", es: "\n    <p>Hola,</p>\n    <p>Tu reserva de alquiler de coches con Camel Global{JOB} ha finalizado. Nos encantaría saber cómo fue.</p>\n    <p>Tu reseña ayuda a otros clientes a elegir la empresa de alquiler adecuada para su viaje.</p>", fr: "\n    <p>Bonjour,</p>\n    <p>Votre réservation de location de voiture Camel Global{JOB} est maintenant terminée. Nous serions ravis de savoir comment cela s'est passé.</p>\n    <p>Votre avis aide d'autres clients à choisir la bonne société de location de voiture pour leur voyage.</p>", it: "\n    <p>Salve,</p>\n    <p>La tua prenotazione di noleggio auto Camel Global{JOB} è ora completata. Ci farebbe molto piacere sapere com'è andata.</p>\n    <p>La tua recensione aiuta altri clienti a scegliere la società di noleggio auto più adatta al loro viaggio.</p>", pt: "\n    <p>Olá,</p>\n    <p>A sua reserva de aluguer de automóvel Camel Global{JOB} está agora concluída. Gostaríamos muito de saber como correu.</p>\n    <p>A sua avaliação ajuda outros clientes a escolher a empresa de aluguer de automóveis certa para a sua viagem.</p>", de: "\n    <p>Hallo,</p>\n    <p>Ihre Camel Global Mietwagebuchung{JOB} ist nun abgeschlossen. Wir würden gerne wissen, wie alles verlaufen ist.</p>\n    <p>Ihre Bewertung hilft anderen Kunden, das richtige Mietwagenunternehmen für ihre Reise zu finden.</p>" };
+  const headings: Record<Locale, string> = { en: "How was your car hire experience? ⭐", es: "¿Qué tal fue tu experiencia de alquiler? ⭐", fr: "Comment s'est passée votre location de voiture ? ⭐", it: "Com'è stata la tua esperienza di noleggio auto? ⭐", pt: "Como foi a sua experiência de aluguer de automóvel? ⭐", de: "Wie war Ihre Mietwagenerfahrung? ⭐" };
+  const bodies = Object.fromEntries(
+    (Object.keys(bodiesRaw) as Locale[]).map(L => [L, `${bodiesRaw[L].replace("{JOB}", job)}
     <p style="margin:24px 0;">
-      <a href="${reviewUrl}"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        Leave a Review
-      </a>
+      <a href="${reviewUrl}" style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">${cta[L] ?? cta.en}</a>
     </p>
-    <p style="color:#64748b; font-size:14px;">It only takes 30 seconds.</p>`;
-
-  const bodyES = `
-    <p>Hola,</p>
-    <p>Tu reserva de alquiler de coches con Camel Global${jobNumber ? ` <strong>#${jobNumber}</strong>` : ""} ha finalizado. Nos encantaría saber cómo fue.</p>
-    <p>Tu reseña ayuda a otros clientes a elegir la empresa de alquiler adecuada para su viaje.</p>
-    <p style="margin:24px 0;">
-      <a href="${reviewUrl}"
-        style="background:#ff7a00; color:#fff; padding:12px 28px; text-decoration:none; font-weight:700; display:inline-block;">
-        Dejar una reseña
-      </a>
-    </p>
-    <p style="color:#64748b; font-size:14px;">Solo lleva 30 segundos.</p>`;
-
+    <p style="color:#64748b; font-size:14px;">${footer[L] ?? footer.en}</p>`])
+  ) as Record<Locale, string>;
   return sendEmail({
     to,
-    subject: locale === "es" ? subjectES : subjectEN,
-    html: brandEmail(
-      "How was your car hire experience? ⭐",
-      "¿Qué tal fue tu experiencia de alquiler? ⭐",
-      bodyEN,
-      bodyES,
-      locale
-    ),
+    subject: (subjects[locale] ?? subjects.en) + sfx(suffixes[locale] ?? suffixes.en),
+    html: brandEmail(headings, bodies, locale),
   });
 }
