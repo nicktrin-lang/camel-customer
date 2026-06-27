@@ -114,6 +114,19 @@ function CompactLanguageToggle() {
   );
 }
 
+// Preserve a house number the customer typed (e.g. "15 Sheering Lower Road") when the
+// geocoder only returns the street. Prepends the typed number unless the chosen address
+// already starts with it. Safe for alphanumeric numbers like "221b"; if the customer
+// typed no number (e.g. a hotel name), the chosen address is returned unchanged.
+function mergeHouseNumber(typed: string, chosen: string): string {
+  const m = String(typed || "").trim().match(/^(\d+[a-zA-Z]?)\b/);
+  if (!m) return chosen;
+  const num = m[1];
+  const esc = num.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp("^\\s*" + esc + "\\b").test(chosen)) return chosen;
+  return num + " " + chosen;
+}
+
 function CustomerHome() {
   const router    = useRouter();
   const supabase  = useMemo(() => createCustomerBrowserClient(), []);
@@ -547,7 +560,7 @@ function CustomerHome() {
                   <div className="absolute z-30 left-0 right-0 mt-0.5 bg-white shadow-xl overflow-hidden border border-black/10">
                     {pickupResults.map((r, i) => (
                       <ResultRow key={i} r={r} onClick={() => {
-                        setPickupAddress(r.display_name); setPickupLat(r.lat); setPickupLng(r.lng); setPickupResults([]);
+                        setPickupAddress(mergeHouseNumber(pickupAddress, r.display_name)); setPickupLat(r.lat); setPickupLng(r.lng); setPickupResults([]);
                       }} />
                     ))}
                   </div>
@@ -566,7 +579,7 @@ function CustomerHome() {
                   <div className="absolute z-30 left-0 right-0 mt-0.5 bg-white shadow-xl overflow-hidden border border-black/10">
                     {dropoffResults.map((r, i) => (
                       <ResultRow key={i} r={r} onClick={() => {
-                        setDropoffAddress(r.display_name); setDropoffLat(r.lat); setDropoffLng(r.lng); setDropoffResults([]);
+                        setDropoffAddress(mergeHouseNumber(dropoffAddress, r.display_name)); setDropoffLat(r.lat); setDropoffLng(r.lng); setDropoffResults([]);
                       }} />
                     ))}
                   </div>
