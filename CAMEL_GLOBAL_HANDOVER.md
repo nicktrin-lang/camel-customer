@@ -691,3 +691,51 @@ no constraint error.
 Delivery note: long pastes corrupt. Multibyte UTF-8 mangles in terminal paste (use \u
 escapes / pure ASCII); even base64 took a homoglyph hit once and a dropped char once - gzip
 +base64 shrinks payload and hard-fails on corruption. Backups this stretch: .chat53c/d/e/f.
+
+---
+
+### PLANNED (not started): Customer-site full localization FR/IT/PT/DE [scoped Jun 27]
+Customer site (camel-customer) is EN/ES only at every layer. Goal: add fr,it,pt,de to
+match the portal's six locales (en,es,fr,it,pt,de). EXCLUDED by decision: customer terms,
+privacy, cookie pages STAY ENGLISH - do not touch. Switcher MUST work on mobile.
+PDFs STAY ENGLISH (NTUK legal doc) - replicate the existing ES behaviour (email localized,
+PDF English).
+
+Do in PHASES, each its own commit + deploy + live-verify (lesson: disk-correct != deployed;
+verify git show HEAD + live DOM). Translation rule: translate EVERYTHING, reject any value
+byte-identical to English and retry (lesson: old runs left English in; validator only checked
+shape). API key in .env.local (ANTHROPIC_API_KEY). Deliver patches pure-ASCII (\u escapes),
+py_compile-gated, backups, tsc-checked. Heredocs: run direct, never wrap in outer cat<<EOF.
+
+PHASE 1 - JSON: lib/i18n/locales/ has en.json + es.json (both 449 keys, 0 missing/extra).
+  Generate fr/it/pt/de from en.json (all 449 keys), reject-English guard, verify parity on disk.
+PHASE 2 - wiring + switcher (mobile):
+  - lib/i18n/LanguageContext.tsx: type Locale (line 5) en|es -> 6; stored check (line 20) -> 6;
+    detect de/fr/it/pt (line 30+); default stays "en".
+  - lib/i18n/useTranslation.ts: import fr/it/pt/de json; translations registry (line 7) -> 6.
+  - app/page.tsx CompactLanguageToggle (line 89, options line 91-93) -> 6 options; it's used
+    desktop (line 430) AND mobile burger (line 467). Also stray hardcoded <option> at line 991
+    (partner-marketing block) has en,es,it,fr,de but NO pt - fix to all 6.
+  - Other switcher refs: lib/i18n/LanguageToggle.tsx, app/ClientRootLayout.tsx, app/account/page.tsx.
+PHASE 3 - chat:
+  - app/components/ChatWidget.tsx: type Locale (line 6) -> 6; STRINGS (en line 21, es line 39)
+    add fr/it/pt/de; STRINGS[locale] ?? en already safe (line 87).
+  - app/api/chat/route.ts: locale parse (line 50) es-or-en -> accept 6; systemPrompt (lines 142,181)
+    replace `locale==="es"?"Spanish":"English"` with a langName map (same fix as portal route).
+PHASE 4 - emails (PDF stays English):
+  - lib/email.ts: brandEmail(headingEN,headingES,bodyEN,bodyES,locale) (line ~73) -> per-locale
+    lookup w/ EN fallback; fns sendCustomerBidReceivedEmail (line 109), sendCustomerBookingCompletedEmail
+    (line ~144), sendReviewReminderEmail (line ~183): widen locale union to 6, add fr/it/pt/de
+    subject+body strings.
+  - lib/portal/generateBookingReceiptPDF.tsx: email HTML subjectES/htmlES (lines 555-556) -> 6;
+    PDF BODY STAYS ENGLISH (header note line 7). companyName ES fallback line 469/90.
+  - Locale plumbing ALREADY EXISTS + WORKS: app/api/webhooks/stripe/route.ts has getCustomerLocale()
+    (reads customer_profiles.communication_locale, lines 116-120) + getPartnerLocale (line 126),
+    passes locale into sendBookingReceiptEmail (line 358), confirmed email (375), partner email (444).
+    Currently collapses to ("es"?"es":"en") at lines 120/134 - widen these to return the real 6.
+  - customer_profiles.communication_locale CHECK constraint is en,es ONLY - MUST widen to 6 via
+    Supabase SQL before fr/it/pt/de can be saved (same fix as partner_profiles in portal Chat 53f).
+  - Note: booking email routes live under app/api/test-booking/ AND app/api/webhooks/stripe/ -
+    confirm which are live vs scaffolding before editing (webhook is live; receipt route too).
+VERIFY each phase live via browser automation (Claude in Chrome) on www.camel-global.com,
+incl. mobile viewport for the switcher. Backups: .loc / .chatwidget / .email per phase.
