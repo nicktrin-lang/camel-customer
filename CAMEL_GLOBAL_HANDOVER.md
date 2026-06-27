@@ -881,3 +881,115 @@ Root problem (same shape as the bid-email bug): locale lookups collapsed `de→e
 Stable tags: v-stable-chat55 (camel-portal AND camel-customer).
 
 
+---
+
+## Chat 55 — Email localization sweep + webhook hardening + UI language fixes [Jun 27 2026]
+Stable rollback tag: `v-stable-chat55` on BOTH camel-portal and camel-customer.
+(This block supersedes any earlier partial Chat 55 note — it includes the webhook work.)
+
+### Shipped (camel-customer)
+- **Account email-language picker → 6 locales.** `app/account/page.tsx` was hardcoded EN/ES;
+  now shows all 6 (en,es,fr,it,pt,de). DB constraint already widened in Chat 54.
+- **Checkout language switcher (was entirely missing).** `app/checkout/[bid_id]/page.tsx` — the
+  global header is suppressed on /checkout (ClientRootLayout `!isCheckoutPage`), so checkout had
+  no switcher. Added CheckoutNav: desktop inline 6-box + mobile burger dropdown, matching the
+  global LanguageBoxes style, reading useLanguage() from the same provider. Logo kept non-link.
+- **NEW: partners emailed on new requests.** Previously the geo+fleet match wrote
+  request_partner_matches but never emailed anyone — the alert was never built.
+  - `lib/email.ts` — added `sendPartnerNewRequestEmail(to,{jobNumber,vehicleCategory,pickupArea,
+    expiresAt,locale})`, 6-locale, links to PORTAL /partner/requests. Exported `Locale`+`coerceLocale()`.
+  - `app/api/test-booking/requests/route.ts` — after matching, looks up partner_applications for the
+    matched user_ids and keeps ONLY status==='live'; the LIVE set now drives BOTH the match-rows
+    insert AND the emails (Promise.allSettled, non-blocking).
+  - BEHAVIOUR CHANGE: approved-but-not-live in-range partners no longer get match rows.
+  - GOTCHA: a live partner with null base_lat/base_lng or service_radius_km silently never matches.
+
+### Shipped (camel-portal) — full email localization
+Root cause (same as the bid-email bug): locale lookups collapsed de→en via `=="es"?"es":"en"`, and
+several emails had no fr/it/pt/de branch. Every notification now honours communication_locale across
+6 locales (EN fallback). Attached PDFs STAY ENGLISH (NTUK rule).
+- `lib/email.ts` — brandEmail + all 7 senders widened to EmailLocale(6) + per-locale maps. Exported
+  `EmailLocale` + `coerceEmailLocale()`.
+- Lookups switched to `coerceEmailLocale(...)` in: partner/bids, admin/applications/make-live,
+  update-status, resend-approval, cron/onboarding-reminder, cron/review-reminder.
+- Bespoke inline-HTML emails rewritten to 6-locale string maps (PDFs untouched):
+  `lib/portal/completeBooking.tsx` (customer + partner completion — refactored into
+  buildCustomerCompletionEmail/buildPartnerCompletionEmail; Stripe reversal/refund + StatementDocument
+  PDF byte-identical); `admin/bookings/[id]/post-refund/route.ts` (customer refund email; Stripe +
+  cap check + PDF unchanged); `admin/bookings/[id]/resend-statement/route.ts` (customer statement
+  email, normal + amended; PDF unchanged).
+- Deliberately English: invoice-data/route.ts (feeds Invoice Data PDF, not an email); all internal
+  [Admin] notification emails. Fuel level VALUES (fuelLabel/QUARTER_LABELS → "½ Tank") stay English
+  in all locales — only labels/prose localized.
+
+### Shipped (camel-portal) — Resend webhook signature verification [DONE]
+- `app/api/admin/outreach/webhook/route.ts` now verifies svix signatures (`svix` npm package added).
+  Bad/missing signature → 401; processing errors still → 200 (no Resend retry storms).
+- GOTCHA (this is what "format mismatch" was): RESEND_WEBHOOK_SECRET in Vercel must be the EXACT
+  Resend signing secret INCLUDING the `whsec_` prefix — no quotes, no trailing newline. A wrong/
+  missing prefix makes svix throw "Base64Coder: incorrect characters for decoding", every event 401s,
+  and open/click tracking silently stops. Env var changes require a redeploy. Verified working
+  (live click incremented the count) after correcting the secret.
+
+### Method / lessons
+- Every file delivered as a download + tsc-verified (standalone or stubbed) before deploy. Stub-
+  induced false errors (db typed `any`; NextRequest missing .json) confirmed by running the ORIGINAL
+  file under the same stub.
+- FR/IT/PT/DE email strings written directly (can't run the repo's translation script — ANTHROPIC_API_KEY
+  is only in the user's .env.local).
+- macOS: `~/Downloads` had com.apple.macl/provenance xattrs → cp/cat-from-Downloads = "Operation not
+  permitted"; `cat src > dest` TRUNCATES dest even when the read fails (clobbered lib/email.ts once;
+  restored via `git checkout HEAD -- lib/email.ts`). Fix: grant terminal Downloads/Full-Disk access,
+  or drag via Finder. Never paste a line starting with `#` into zsh.
+
+---
+
+## OUTSTANDING — to do (Chat 56+)
+
+### A. Verification / live tests (do soon — code is shipped, real-world send not yet confirmed)
+- [ ] **Live German email test.** Set a test customer communication_locale='de', trigger a booking
+      confirmation + a completion; confirm emails arrive in German with English PDFs. Now broad —
+      the whole email surface was localized this session. Clicks track more reliably than opens.
+- [ ] **Partner new-request alert — live test.** Confirm a live, in-radius partner actually receives
+      "New booking request in your area". Run the null-coords audit first:
+      SELECT pa.company_name, pa.status, pa.email, pp.communication_locale, pp.base_lat, pp.base_lng,
+             pp.service_radius_km
+      FROM partner_applications pa JOIN partner_profiles pp ON pp.user_id = pa.user_id
+      WHERE pa.status='live';
+- [ ] **bookings/[id] language switcher** spot-check (checkout was fixed this session; this page has a
+      bespoke header and wasn't individually audited for EN/ES leaks).
+
+### B. Deferred technical work
+- [ ] **Server-side middleware auth gate.** middleware.ts is still pass-through (NextResponse.next()).
+      DECISION: defence-in-depth only — data is already protected at the API layer (verified JWT +
+      .eq ownership scoping). Riskier change (session/cookie handling); test on staging. Low priority.
+- [ ] **Commission invoice VAT.** Add VAT number + 20% UK VAT to the commission invoice PDF once NTUK
+      is VAT-registered.
+- [ ] **Xero monthly commission endpoint** — not built.
+
+### C. US market launch (currently "ready-but-not-activated" — real gaps below)
+Handover frames US as a future market: USD is wired through the currency system, Stripe Connect
+country map includes US — but the platform is built UK/NTUK + EU/Spain-shaped. None of the below is
+a code blocker today; they are the work a real US launch would require. NOTE: tax/legal items here
+need confirmation with a US tax/legal professional — they are flagged as areas to address, not advice.
+- [ ] **Sales tax vs VAT.** The entire invoicing/commission architecture assumes UK VAT (and EU/Spain).
+      The US has no VAT — it uses state/local sales tax with nexus rules. A US launch needs a US
+      sales-tax model (likely a tax provider e.g. Stripe Tax / Avalara), not the VAT path.
+- [ ] **Partner tax reporting: DAC7 → 1099-K.** DAC7 (the deferred EU platform-reporting item) is
+      EU-specific. A US launch would instead need IRS 1099-K reporting for partner payouts, plus
+      W-9/TIN collection at partner onboarding. Different system entirely.
+- [ ] **Legal pages / locale.** Customer legal pages (terms, privacy) are EN/ES-only by design. US
+      needs US-English content and US-specific terms/privacy (e.g. CCPA/state privacy), reviewed by
+      counsel. Operating Rules / Terms PDFs would need a US variant.
+- [ ] **USD end-to-end validation.** USD is wired and Stripe Connect lists US, but the full customer
+      pay → partner payout (USD) path has not been live-tested. Validate before any US pilot.
+- [ ] **Entity / banking / Stripe.** NTUK is a UK company. Confirm whether US operations need a US
+      entity, US tax registration, and Stripe Connect onboarding for US-based partners (US bank
+      accounts, SSN/EIN). Finance/legal task, not engineering.
+- [ ] **i18n / formatting.** US date/number/address formats, US phone validation, and US-English copy
+      (vs en-GB) where the UI currently assumes UK/EU conventions.
+
+### Reference: removed from Future Work this session (done)
+- Terms & Operating Rules PDF translations FR/IT/PT/DE — DONE.
+- Resend webhook signature verification — DONE (this session).
+
