@@ -46,6 +46,19 @@ type SearchResult = {
   lon: string;
 };
 
+// Preserve a house number the customer typed (e.g. "15 Sheering Lower Road") when
+// the geocoder only returns the street. Prepends the typed number unless the chosen
+// address already starts with it. Safe for alphanumeric numbers like "221b".
+function mergeHouseNumber(typed: string, chosen: string): string {
+  const m = String(typed || "").trim().match(/^(\d+[a-zA-Z]?)\b/);
+  if (!m) return chosen;
+  const num = m[1];
+  const esc = num.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp("^\\s*" + esc + "\\b").test(chosen)) return chosen;
+  return num + " " + chosen;
+}
+
+
 const DEFAULT_CENTER: [number, number] = [38.3452, -0.481];
 
 async function reverseLookup(lat: number, lng: number) {
@@ -185,14 +198,14 @@ export default function TestBookingNewPage() {
   }
 
   function selectPickup(result: SearchResult) {
-    setPickupAddress(result.display_name);
+    setPickupAddress(mergeHouseNumber(pickupAddress, result.display_name));
     setPickupLat(Number(result.lat));
     setPickupLng(Number(result.lon));
     setPickupResults([]);
   }
 
   function selectDropoff(result: SearchResult) {
-    setDropoffAddress(result.display_name);
+    setDropoffAddress(mergeHouseNumber(dropoffAddress, result.display_name));
     setDropoffLat(Number(result.lat));
     setDropoffLng(Number(result.lon));
     setDropoffResults([]);
