@@ -9,6 +9,17 @@ const inputCls         = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium te
 const inputDisabledCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black/30 cursor-not-allowed";
 const labelCls         = "block text-xs font-black uppercase tracking-widest text-black mb-2";
 
+type EmailLocale = "en" | "es" | "fr" | "it" | "pt" | "de";
+
+const EMAIL_LANGS: { code: EmailLocale; label: string }[] = [
+  { code: "en", label: "🇬🇧 English" },
+  { code: "es", label: "🇪🇸 Español" },
+  { code: "fr", label: "🇫🇷 Français" },
+  { code: "it", label: "🇮🇹 Italiano" },
+  { code: "pt", label: "🇵🇹 Português" },
+  { code: "de", label: "🇩🇪 Deutsch" },
+];
+
 export default function AccountPage() {
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
   const router   = useRouter();
@@ -26,7 +37,7 @@ export default function AccountPage() {
   const [showConfirm,     setShowConfirm]     = useState(false);
   const [deleting,        setDeleting]        = useState(false);
   const [deleteError,     setDeleteError]     = useState<string | null>(null);
-  const [emailLang,       setEmailLang]       = useState<"en" | "es">("en");
+  const [emailLang,       setEmailLang]       = useState<EmailLocale>("en");
   const [langSaving,      setLangSaving]      = useState(false);
   const [langSaved,       setLangSaved]       = useState(false);
   const [billingAddress,  setBillingAddress]  = useState("");
@@ -128,7 +139,7 @@ export default function AccountPage() {
     }
   }
 
-  async function handleLangSave(lang: "en" | "es") {
+  async function handleLangSave(lang: EmailLocale) {
     setEmailLang(lang); setLangSaving(true); setLangSaved(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -273,19 +284,19 @@ export default function AccountPage() {
             <p className="text-xs font-black uppercase tracking-widest text-black/40 mb-2">{t("account.emailLang.title")}</p>
             <p className="text-sm font-semibold text-black/60 mb-5">{t("account.emailLang.subtitle")}</p>
             <div className="grid grid-cols-2 gap-3">
-              {(["en", "es"] as const).map(lang => (
+              {EMAIL_LANGS.map(({ code, label }) => (
                 <button
-                  key={lang}
+                  key={code}
                   type="button"
                   disabled={langSaving}
-                  onClick={() => handleLangSave(lang)}
+                  onClick={() => handleLangSave(code)}
                   className={`py-4 text-base font-black transition-colors ${
-                    emailLang === lang
+                    emailLang === code
                       ? "bg-[#ff7a00] text-white"
                       : "bg-[#f0f0f0] text-black hover:bg-[#e8e8e8]"
                   }`}
                 >
-                  {lang === "en" ? "🇬🇧 English" : "🇪🇸 Español"}
+                  {label}
                 </button>
               ))}
             </div>
