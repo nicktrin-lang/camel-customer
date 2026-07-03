@@ -993,3 +993,107 @@ need confirmation with a US tax/legal professional — they are flagged as areas
 - Terms & Operating Rules PDF translations FR/IT/PT/DE — DONE.
 - Resend webhook signature verification — DONE (this session).
 
+# Handover — Chat 56
+
+Continues from the Chat 55 handover. Two repos: **camel-portal** (partner/admin/driver portal) and **camel-customer** (customer booking site). Both Next.js, Supabase, Stripe Connect, 6-locale i18n (en/es/fr/it/pt/de).
+
+Stable tags: `v-stable-chat55` (start of this session). Recommend tagging `v-stable-chat56` at the end (see rollback doc).
+
+---
+
+## What shipped this session
+
+### 1. Mobile language-switcher consistency (portal)
+All portal auth/marketing surfaces now use ONE pattern: desktop inline switcher (`lg+`), mobile **hamburger** whose dropdown holds a six-box LANGUAGE row (`t("settings.language.label")` + `flex-1 / py-2.5` active-orange), matching the driver authenticated header.
+- Homepage, partner login, partner reset-password, partner signup, driver public header (login/signup/reset via `app/driver/layout.tsx`).
+- Root cause fixed along the way: `LanguageToggle.tsx` has **no** `hidden lg:flex` (handover-55 note was wrong) — it renders at all breakpoints, which caused a double-up when a second mobile row was added. Fix = wrap inline toggle in `hidden lg:*` + single mobile treatment.
+
+### 2. Stripe connect hardening (portal) — `71bfb3a` + `7cc88c9`
+`app/api/partner/stripe/connect/route.ts`:
+- `stripeCountry()` now **throws** on an unrecognised `base_country` instead of `|| "ES"`. The old silent Spain default created wrong-country Stripe accounts (a connected account's country is **locked at creation**), which is exactly what broke the Australian partner.
+- Account settlement currency is **country-derived** (`COUNTRY_CURRENCY[countryCode]`), not the partner's display currency.
+- On account creation, writes `default_currency = settlement currency` (uppercased) back to `partner_profiles` → **Stripe is the single source of truth** for partner currency.
+
+### 3. Multi-currency rollout: AUD / NZD / CAD (both repos) — Phases 0–4
+Added Australian Dollar, NZ Dollar, Canadian Dollar to the existing EUR/GBP/USD system. **Key architecture (confirmed with the code, corrects a stale comment):** the system is **bid-currency, NO FX** — the partner's currency (= their Stripe settlement currency, country-derived, read-only) is what they bid in, what the customer is charged, and what they're paid out. The `useCurrency`/rate layer is only a **secondary browse-display** aid, never the transactional path.
+
+- **Phase 0 (foundation):** `lib/currency.ts` widened to 6; new shared exports `CURRENCIES`, `currencyLocale()`, `currencySymbol()`, `coerceCurrency()`, `isCurrency()`, `formatMoney()`. `lib/useCurrency.ts`, `app/api/currency/rate/route.ts`, and customer `lib/serverCurrency.ts` all handle 6. Rate route fetches AUD/NZD/CAD from frankfurter.app.
+- **Phase 1 (coercion points):** every place that narrowed currency to EUR/GBP(/USD) now uses `coerceCurrency()` — portal `bids/route.ts`, `partner/requests/[id]`, `admin/accounts/[id]`; customer `create-intent`, `book/page.tsx`, `test-booking/{requests,bids/accept,requests/[id]}`. This is what lets an AUD bid be stored and charged as AUD.
+- **Phase 2 (reporting/CSV):** the 4 reporting pages (`admin/bookings`, `admin/reports`, `partner/bookings`, `partner/reports`) iterate `CURRENCIES` instead of `["EUR","GBP","USD"]`; per-currency accumulators built dynamically from `CURRENCIES`. AUD/NZD/CAD now appear in breakdowns, filters, and CSV summary rows.
+- **Phase 3 (read-only currency UI):** partner currency is Stripe-derived & locked. `partner/profile/page.tsx` shows all 6 correctly (was falling through to "Euro"). Onboarding `StepCurrency` is now **informational** (no picker, no DB write) — reused `onboarding.currency.*` keys, retext'd in all 6 locales, explaining currency is set at the Stripe payout step.
+- **Phase 4 (formatting polish):** replaced the repeated `GBP→en-GB, USD→en-US, else es-ES` ternaries / 3-key locale maps with the shared `currencyLocale()` across booking-detail pages, PDFs, refund/statement routes, webhook. AUD/NZD/CAD now format natively (A$/NZ$/C$ with correct grouping).
+- **Phase 5 (verification):** end-to-end tested by flipping test booking `1000167` through AUD→NZD→CAD and confirming bookings/reports/CSV/detail render correctly, then restored to EUR. **Passed.** (Data-only test, no live charge.)
+
+The **€10 minimum-commission floor** (stored EUR) now converts to bid currency via a fixed `MIN_FLOOR_RATE` map in `create-intent` (approximate rates: AUD 1.63, NZD 1.78, CAD 1.47).
+
+### 4. Australia city list + generic tax wording (portal) — `19a971a`
+- Portal `lib/cities.ts` was stale (Spain/UK/FR/IT/DE/PT only). Replaced with the customer repo's fuller list — now includes **Australia** (7 cities), Netherlands, Ireland, expanded US/UK/Greece, UAE. Fixes AU partners being unable to find their city at signup.
+- Genericized Spain-specific tax strings site-wide across all 6 locales: **"VAT / NIF" → "VAT / Tax number"** (localized per language), removed the "Spanish companies use a NIF… ESB12345678" hint/placeholder, softened the eligibility line. No new translation keys.
+
+---
+
+## Current currency model (important for future work)
+
+- **One currency per partner = their Stripe account settlement currency** (country-derived at Stripe onboarding, written to `partner_profiles.default_currency`, **read-only** everywhere).
+- **Bid currency = charge currency = payout currency = settlement currency.** No FX on the transactional path.
+- Each bid/booking **snapshots** its currency at creation (`partner_bids.currency`, `partner_bookings.currency`) — history is immutable; changing a profile currency never rewrites past rows.
+- Multi-currency-per-partner is deliberately **out of scope** (would require multiple Stripe accounts and reintroduce FX).
+- Supported set is defined once in `lib/currency.ts` `CURRENCIES`. Adding a 7th currency = add it there + its `COUNTRY_MAP`/`COUNTRY_CURRENCY` entry in the connect route + a `MIN_FLOOR_RATE` entry + a rate in the rate route/`serverCurrency`. The shared helpers mean most consumers pick it up automatically.
+
+---
+
+## Stripe corridor reality (the AU/NZ payout blocker)
+
+- Your UK platform uses **destination charges** (customer pays → funds auto-transfer to partner's connected account). This works **in-corridor only**: US, UK, EEA, **Canada**, Switzerland.
+- **CAD is fully live** — Canada is in-corridor, no extra Stripe setup.
+- **AU / NZ are OUT of corridor.** Cross-border transfers don't reach them, and recipient-service-agreement accounts can't receive cross-border transfers either. Confirmed by Stripe live chat.
+- **The solution is Global Payouts** — a separate rail: funds land in the platform balance, then you explicitly send an outbound payment to the AU/NZ partner as a "recipient" (their bank details, per-payout FX quote, 0.25%+ fee). It is **limited public preview**, **Sales-gated** (not self-serve), verification takes a few business days.
+- **Status:** email sent to Stripe Sales requesting Global Payouts access for AU/NZ (see the 5 questions below). **Nothing to build until they reply** — Q2 (reuse Connect accounts vs. separate recipients) and Q5 (destination-charge vs. separate-charge-plus-outbound) determine the whole shape of the build.
+
+Questions pending with Stripe Sales:
+1. Enable Global Payouts for UK platform, AU/NZ recipients — eligibility/timeline.
+2. Reuse existing Connect accounts as recipients, or create separate Global Payouts recipient objects?
+3. Exact recipient onboarding data required (bank/routing, address, business type)?
+4. Available payout methods for AU/NZ (local bank vs card)?
+5. Works with destination charges, or requires separate charges + explicit outbound payment per booking? FX/fee/settlement mechanics?
+
+---
+
+## Kingsman Chauffeur Services (the AU partner) — state
+
+- `user_id = 116fd343-a034-4153-ac33-34bf1fcd7153`
+- Old **Spanish** Stripe account `acct_1TmAtY96UBUllKs9` was created by the pre-fix silent-ES default → couldn't attach an AU bank (country locked). **Deleted in Stripe.**
+- Profile now primed for a clean AU reconnect: `base_country = Australia`, `default_currency = AUD`, `stripe_account_id = NULL`.
+- **Next:** partner reconnects via portal ("Connect Stripe") → route mints a fresh **AU** account (AUD settlement) → he can add his Australian bank and complete onboarding. Reconnect email drafted/sent.
+- **Payout still blocked** until Global Payouts is enabled (above). Onboarding completes; live payout follows Stripe approval.
+
+---
+
+## Outstanding / to-do
+
+**Blocking on Stripe (no code until they reply):**
+- Global Payouts approval for AU/NZ → then build the AU/NZ payout path (likely: separate charge to platform balance + recipient creation + per-booking outbound payment + reconcile against existing `payout_status`/`payout_batch_id` columns). Scope as its own phased project.
+
+**Carried over from Chat 55 (still open):**
+- Live German-email test (set a test customer `communication_locale='de'`, trigger booking confirmation + completion, verify German email + English PDF).
+- Partner new-request alert live test — run null-coords audit SQL first (live partners with null `base_lat`/`base_lng`/`service_radius_km` silently never match), then confirm a live in-radius partner receives the alert.
+- `bookings/[id]` language-switcher spot-check (bespoke header, never audited for EN/ES leaks).
+- Server-side middleware auth gate (`middleware.ts` still pass-through; defence-in-depth, low priority).
+- Commission invoice VAT (blocked on NTUK VAT registration); Xero monthly commission endpoint (not built).
+- US-market launch items (sales tax vs VAT, 1099-K/W-9, US legal pages, USD end-to-end, entity/banking) — need a US professional.
+
+**Housekeeping:**
+- `.bak` files piling up in both repos (`*.chat5*.bak`) — clutter `git status`. Sweep them out or add `*.bak` to `.gitignore` when convenient.
+- `git` shows `camel-coming-soon` submodule always modified — ignore it, never `git add` it.
+
+---
+
+## Working-agreement notes (carried forward + reinforced this session)
+
+- **Always check the actual file before rewriting** — never assume the artifact/comment is current. (Two stale-comment traps this session: the `LanguageToggle` "hidden lg:flex" note, and the `currency.ts` "all prices in EUR" comment — both wrong; the code was truth.)
+- **Deliver as downloads or `python3 << 'PYEOF'` heredocs**, not pasted scripts. Browser downloads to `~/Downloads` sometimes don't land — heredocs are the reliable path. Never paste raw multi-line scripts into zsh (garbled / `event not found`).
+- **zsh globs `[id]` paths** — always single-quote paths containing `[...]` in `git add`, `cat`, `sed`, etc. This bit us repeatedly.
+- **Patch scripts must back up + assert + abort on mismatch** (never silent no-op). Validate against a faithful fixture when the file's too big to eyeball.
+- **`tsc --noEmit` after every change; commit per logical unit.** Widening a shared type surfaces every hardcoded consumer — use tsc as the checklist.
+- **Terminal command output frequently pasted back empty this session** — screenshots came through reliably. If a paste is blank, screenshot the terminal.
+- Git commits show a "committer name/email not configured" notice — harmless; commits succeed. (Optionally `git config --global user.name/user.email` to silence.)
