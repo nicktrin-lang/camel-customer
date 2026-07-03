@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
 import { calculateCommission } from "@/lib/portal/calculateCommission";
+import { coerceCurrency, type Currency } from "@/lib/currency";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-04-22.dahlia" as any });
 
@@ -11,13 +12,17 @@ function getBearerToken(req: Request) {
   return auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : null;
 }
 
-type Currency = "EUR" | "GBP" | "USD";
-
-function normalizeCurrency(v: unknown): Currency {
-  const s = String(v || "").toUpperCase().trim();
-  if (s === "GBP" || s === "USD") return s;
-  return "EUR";
-}
+// Approximate EUR→X multipliers used ONLY to convert the €10 minimum-commission
+// floor into the bid currency. The commission itself is percentage-based; this
+// floor only bites on very small hires. Rough fixed rates are acceptable here.
+const MIN_FLOOR_RATE: Record<Currency, number> = {
+  EUR: 1,
+  GBP: 0.85,
+  USD: 1.08,
+  AUD: 1.63,
+  NZD: 1.78,
+  CAD: 1.47,
+};
 
 function fmtAmt(n: number, currency: string): string {
   return `${currency} ${n.toFixed(2)}`;
@@ -61,7 +66,7 @@ export async function POST(req: Request) {
     }
 
     // ── Customer always pays in the partner's bid currency — no conversion ──
-    const currency    = normalizeCurrency(bid.currency);
+    const currency     = coerceCurrency(bid.currency);
     const carHirePrice = Number(bid.car_hire_price || 0);
     const fuelPrice    = Number(bid.fuel_price || 0);
     const totalPrice   = Math.round((carHirePrice + fuelPrice) * 100) / 100;
@@ -83,11 +88,10 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     const commissionRatePct = partnerProfile.commission_rate ?? platform?.default_commission_rate ?? 20;
-    // Minimum commission is stored in EUR — convert to bid currency if needed
+    // Minimum commission is stored in EUR — convert to the bid currency using the
+    // fixed floor rates above. The floor only matters for very small hires.
     const minCommissionEur  = platform?.minimum_commission_amount ?? 10;
-    // Simple conversion for minimum only: EUR is base, use approximate fixed rates for floor
-    // This is just the floor — the actual commission calculation is percentage-based anyway
-    const minCommission     = currency === "GBP" ? minCommissionEur * 0.85 : currency === "USD" ? minCommissionEur * 1.08 : minCommissionEur;
+    const minCommission     = Math.round(minCommissionEur * (MIN_FLOOR_RATE[currency] ?? 1) * 100) / 100;
 
     const { commissionAmount, partnerPayoutAmount } = calculateCommission(
       carHirePrice,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
 import { sendPartnerNewRequestEmail, coerceLocale } from "@/lib/email";
+import { coerceCurrency } from "@/lib/currency";
 
 function getBearerToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -39,11 +40,7 @@ function addHoursToNow(hours: number) {
   return now.toISOString();
 }
 
-function normalizeCurrency(v: unknown): "EUR" | "GBP" | "USD" {
-  const s = String(v || "").toUpperCase().trim();
-  if (s === "GBP" || s === "USD") return s;
-  return "EUR";
-}
+// currency coercion handled by shared coerceCurrency()
 
 export async function GET(req: Request) {
   try {
@@ -96,7 +93,7 @@ export async function POST(req: Request) {
     const vehicle_category_slug    = String(body?.vehicle_category_slug || "").trim();
     const vehicle_category_name    = String(body?.vehicle_category_name || "").trim();
     const notes                    = String(body?.notes || "").trim();
-    const currency                 = normalizeCurrency(body?.currency);
+    const currency                 = coerceCurrency(body?.currency);
 
     // Driver age fields
     const driver_age_raw         = body?.driver_age == null ? null : Number(body.driver_age);

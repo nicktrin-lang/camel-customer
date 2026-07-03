@@ -3,6 +3,7 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
 import { syncBookingStatuses } from "@/lib/portal/syncBookingStatuses";
 import { calculateCommission } from "@/lib/portal/calculateCommission";
+import { coerceCurrency } from "@/lib/currency";
 
 function getBearerToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -44,8 +45,7 @@ export async function POST(req: Request) {
     if (bidErr) return NextResponse.json({ error: bidErr.message }, { status: 400 });
     if (!bidRow) return NextResponse.json({ error: "Bid not found" }, { status: 404 });
 
-    const bidCurrency: "EUR" | "GBP" =
-      (bidRow.currency === "EUR" || bidRow.currency === "GBP") ? bidRow.currency : "EUR";
+    const bidCurrency = coerceCurrency(bidRow.currency);
 
     const requestId     = String(bidRow.request_id || "");
     const partnerUserId = String(bidRow.partner_user_id || "");

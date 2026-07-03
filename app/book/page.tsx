@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
+import { coerceCurrency } from "@/lib/currency";
 
 function calculateDurationMinutes(a: string, b: string): number | null {
   if (!a || !b) return null;
@@ -19,11 +20,7 @@ function calculateDurationMinutes(a: string, b: string): number | null {
   return Math.ceil(diff / (24 * 60 * 60 * 1000)) * 24 * 60;
 }
 
-function normalizeCurrency(v: unknown): "EUR" | "GBP" | "USD" {
-  const s = String(v || "").toUpperCase().trim();
-  if (s === "GBP" || s === "USD") return s;
-  return "EUR";
-}
+// currency coercion handled by shared coerceCurrency()
 
 export default function BookPage() {
   const router   = useRouter();
@@ -84,7 +81,7 @@ export default function BookPage() {
             sport_equipment: sportEquipment && sportEquipment !== "none" ? sportEquipment : null,
             vehicle_category_slug: cat.slug, vehicle_category_name: cat.name,
             notes: notes || "",
-            currency: normalizeCurrency(currency),
+            currency: coerceCurrency(currency),
             driver_age: driverAge ? Number(driverAge) : null,
             additional_drivers: Number(additionalDrivers || 0),
             additional_driver_ages: additionalDriverAgesStr,

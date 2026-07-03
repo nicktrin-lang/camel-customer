@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
+import { coerceCurrency } from "@/lib/currency";
 
 function getBearerToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -107,7 +108,7 @@ export async function GET(
         notes: bid.notes || null,
         status: bid.status,
         created_at: bid.created_at,
-        currency: (bid.currency as "EUR" | "GBP") ?? "EUR",
+        currency: coerceCurrency(bid.currency),
         avg_rating: ratings?.avg ?? null,
         review_count: ratings?.count ?? 0,
         mileage_limit: bid.mileage_limit || null,
@@ -188,8 +189,8 @@ export async function GET(
           driver_vehicle: bk.driver_vehicle || null,
           driver_notes: bk.driver_notes || null,
           driver_assigned_at: bk.driver_assigned_at || null,
-          currency: (bk.currency as "EUR" | "GBP") ?? "EUR",
-          charge_currency: (bk.charge_currency as "EUR" | "GBP" | "USD") ?? null,
+          currency: coerceCurrency(bk.currency),
+          charge_currency: bk.charge_currency ? coerceCurrency(bk.charge_currency) : null,
           fuel_price: bk.fuel_price ?? 0,
           car_hire_price: bk.car_hire_price ?? 0,
           fuel_used_quarters: bk.fuel_used_quarters ?? null,
