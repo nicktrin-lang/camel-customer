@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { currencyLocale } from "@/lib/currency";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -23,7 +24,7 @@ type IntentData = {
   partner_name:      string;
 };
 
-const LOCALE_MAP: Record<string, string> = { EUR: "es-ES", GBP: "en-GB", USD: "en-US" };
+const LOCALE_MAP: Record<string, string> = { EUR: "es-ES", GBP: "en-GB", USD: "en-US", AUD: "en-AU", NZD: "en-NZ", CAD: "en-CA" };
 function fmtCurr(amount: number, currency: string) {
   const curr = currency.toUpperCase();
   return new Intl.NumberFormat(LOCALE_MAP[curr] || "en-GB", { style: "currency", currency: curr }).format(amount);

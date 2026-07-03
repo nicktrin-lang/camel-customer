@@ -5,6 +5,7 @@
  */
 
 import React from "react";
+import { currencyLocale } from "@/lib/currency";
 import {
   Document, Page, Text, View, Image,
   StyleSheet, renderToBuffer,
@@ -26,7 +27,7 @@ function fuelLabel(v: string | null | undefined): string {
 }
 
 function fmtMoney(amount: number, currency: string): string {
-  const locale = currency === "GBP" ? "en-GB" : currency === "USD" ? "en-US" : "es-ES";
+  const locale = currencyLocale(currency);
   return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
 }
 

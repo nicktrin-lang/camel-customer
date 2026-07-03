@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { currencyLocale } from "@/lib/currency";
 import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import { syncBookingStatuses } from "@/lib/portal/syncBookingStatuses";
@@ -345,7 +346,7 @@ export async function POST(req: NextRequest) {
       const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL || "https://camel-global.com";
       const portalUrl   = process.env.NEXT_PUBLIC_PORTAL_URL || "https://portal.camel-global.com";
       const fmtAmt      = (n: number) => new Intl.NumberFormat(
-        currency === "GBP" ? "en-GB" : currency === "USD" ? "en-US" : "es-ES",
+        currencyLocale(currency),
         { style: "currency", currency }
       ).format(n);
       const pickupTime  = request?.pickup_at

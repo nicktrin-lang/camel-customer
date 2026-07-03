@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { currencyLocale } from "@/lib/currency";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
-type Currency = "EUR" | "GBP" | "USD";
+type Currency = "EUR" | "GBP" | "USD" | "AUD" | "NZD" | "CAD";
 
 type RequestData = {
   id: string; job_number: number|null; pickup_address: string;
@@ -126,7 +127,7 @@ function FuelBar({ level, light }: { level: string|null; light?: boolean }) {
   );
 }
 
-const LOCALE_MAP: Record<Currency,string> = { EUR:"es-ES", GBP:"en-GB", USD:"en-US" };
+const LOCALE_MAP: Record<Currency,string> = { EUR:"es-ES", GBP:"en-GB", USD:"en-US", AUD:"en-AU", NZD:"en-NZ", CAD:"en-CA" };
 function fmtCurr(a: number, c: Currency) {
   return new Intl.NumberFormat(LOCALE_MAP[c],{style:"currency",currency:c}).format(a);
 }

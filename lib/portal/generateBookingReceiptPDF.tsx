@@ -8,6 +8,7 @@
  */
 
 import React from "react";
+import { currencyLocale } from "@/lib/currency";
 import {
   Document,
   Page,
@@ -64,7 +65,7 @@ const s = StyleSheet.create({
 });
 
 function fmtMoney(amount: number, currency: string): string {
-  const locale = currency === "GBP" ? "en-GB" : currency === "USD" ? "en-US" : "es-ES";
+  const locale = currencyLocale(currency);
   return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
 }
 
@@ -462,7 +463,7 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
   const jobNo = params.jobNumber ? `#${params.jobNumber}` : "";
   const cur = params.chargeCurrency;
   const fmtCharge = (n: number) =>
-    new Intl.NumberFormat(cur === "GBP" ? "en-GB" : cur === "USD" ? "en-US" : "es-ES", {
+    new Intl.NumberFormat(currencyLocale(cur), {
       style: "currency", currency: cur,
     }).format(n);
 
