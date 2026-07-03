@@ -4,29 +4,36 @@
  * Fetches directly from frankfurter.app with in-memory cache.
  */
 
-export type Currency = "EUR" | "GBP" | "USD";
+export type Currency = "EUR" | "GBP" | "USD" | "AUD" | "NZD" | "CAD";
+
+// Non-EUR currencies we fetch rates for (EUR is the anchor / base = 1)
+type NonEur = Exclude<Currency, "EUR">;
+type RateMap = Record<NonEur, number>;
 
 // ── Server-side rate cache ────────────────────────────────────────────────────
-let cachedRates: { GBP: number; USD: number } | null = null;
+let cachedRates: RateMap | null = null;
 let cacheExpiry = 0;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
-const FALLBACK: { GBP: number; USD: number } = { GBP: 0.85, USD: 1.08 };
+const FALLBACK: RateMap = { GBP: 0.85, USD: 1.08, AUD: 1.63, NZD: 1.78, CAD: 1.47 };
 
-async function getEurRates(): Promise<{ GBP: number; USD: number }> {
+async function getEurRates(): Promise<RateMap> {
   const now = Date.now();
   if (cachedRates && now < cacheExpiry) return cachedRates;
 
   try {
-    const res = await fetch("https://api.frankfurter.app/latest?from=EUR&to=GBP,USD", {
+    const res = await fetch("https://api.frankfurter.app/latest?from=EUR&to=GBP,USD,AUD,NZD,CAD", {
       next: { revalidate: 3600 },
     });
     if (!res.ok) throw new Error("Frankfurter unavailable");
     const data = await res.json();
     const GBP = Number(data?.rates?.GBP);
     const USD = Number(data?.rates?.USD);
-    if (!GBP || !USD || isNaN(GBP) || isNaN(USD)) throw new Error("Invalid rates");
-    cachedRates = { GBP, USD };
+    const AUD = Number(data?.rates?.AUD);
+    const NZD = Number(data?.rates?.NZD);
+    const CAD = Number(data?.rates?.CAD);
+    if ([GBP, USD, AUD, NZD, CAD].some(v => !v || isNaN(v))) throw new Error("Invalid rates");
+    cachedRates = { GBP, USD, AUD, NZD, CAD };
     cacheExpiry = now + CACHE_TTL;
     return cachedRates;
   } catch (e) {
@@ -45,13 +52,13 @@ export async function getRate(from: Currency, to: Currency): Promise<number> {
   const rates = await getEurRates();
 
   // EUR → X
-  if (from === "EUR" && to !== "EUR") return rates[to as "GBP" | "USD"];
+  if (from === "EUR" && to !== "EUR") return rates[to as NonEur];
 
   // X → EUR
-  if (to === "EUR" && from !== "EUR") return 1 / rates[from as "GBP" | "USD"];
+  if (to === "EUR" && from !== "EUR") return 1 / rates[from as NonEur];
 
   // X → Y (via EUR) e.g. GBP → USD
-  return (1 / rates[from as "GBP" | "USD"]) * rates[to as "GBP" | "USD"];
+  return (1 / rates[from as NonEur]) * rates[to as NonEur];
 }
 
 /**

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useCurrency } from "@/lib/useCurrency";
 import type { Currency } from "@/lib/currency";
+import { currencyLocale } from "@/lib/currency";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +65,7 @@ type BookingData = {
 
 type ResponseShape = { request: RequestData; bids: BidRow[]; booking: BookingData | null };
 type ConfirmSection = "collection" | "return";
-type Rates = { GBP: number; USD: number };
+type Rates = { GBP: number; USD: number; AUD: number; NZD: number; CAD: number };
 
 // ── Fuel helpers ──────────────────────────────────────────────────────────────
 
@@ -147,20 +148,15 @@ const QUARTER_LABELS: Record<number, string> = {
 
 // ── Currency helpers ──────────────────────────────────────────────────────────
 
-const LOCALE_MAP: Record<Currency, string> = { EUR: "es-ES", GBP: "en-GB", USD: "en-US" };
-
 function fmtCurr(amount: number, curr: Currency): string {
-  return new Intl.NumberFormat(LOCALE_MAP[curr], { style: "currency", currency: curr }).format(amount);
+  return new Intl.NumberFormat(currencyLocale(curr), { style: "currency", currency: curr }).format(amount);
 }
 
 function convertAmount(amount: number, from: Currency, to: Currency, rates: Rates): number {
   if (from === to) return amount;
-  let inEur = amount;
-  if (from === "GBP") inEur = Math.round((amount / rates.GBP) * 100) / 100;
-  if (from === "USD") inEur = Math.round((amount / rates.USD) * 100) / 100;
+  const inEur = from === "EUR" ? amount : Math.round((amount / rates[from]) * 100) / 100;
   if (to === "EUR") return inEur;
-  if (to === "GBP") return Math.round(inEur * rates.GBP * 100) / 100;
-  return Math.round(inEur * rates.USD * 100) / 100;
+  return Math.round(inEur * rates[to] * 100) / 100;
 }
 
 function BidAmount({ amount, bidCurrency, customerCurrency, rates }: {
@@ -659,7 +655,7 @@ export default function TestBookingRequestDetailPage({ params }: { params: Promi
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
   const router   = useRouter();
   const { rates: hookRates, currency } = useCurrency();
-  const [liveRates,        setLiveRates]        = useState<Rates>(hookRates ?? { GBP: 0.85, USD: 1.08 });
+  const [liveRates,        setLiveRates]        = useState<Rates>(hookRates ?? { GBP: 0.85, USD: 1.08, AUD: 1.63, NZD: 1.78, CAD: 1.47 });
   const [rateIsLive,       setRateIsLive]       = useState(false);
   const [requestId,        setRequestId]        = useState("");
   const [authChecked,      setAuthChecked]      = useState(false);
@@ -694,7 +690,7 @@ export default function TestBookingRequestDetailPage({ params }: { params: Promi
 
   useEffect(() => {
     fetch("/api/currency/rate", { cache: "no-store" }).then(r => r.json()).then(({ rates, live }) => {
-      setLiveRates({ GBP: Number(rates?.GBP) || 0.85, USD: Number(rates?.USD) || 1.08 });
+      setLiveRates({ GBP: Number(rates?.GBP) || 0.85, USD: Number(rates?.USD) || 1.08, AUD: Number(rates?.AUD) || 1.63, NZD: Number(rates?.NZD) || 1.78, CAD: Number(rates?.CAD) || 1.47 });
       setRateIsLive(live);
     }).catch(() => {});
   }, []);

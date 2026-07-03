@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import type { Currency } from "@/lib/currency";
-import { formatEUR, formatGBP, formatUSD } from "@/lib/currency";
+import { formatEUR, formatGBP, formatMoney, coerceCurrency, isCurrency } from "@/lib/currency";
 
 const STORAGE_KEY = "camel_currency_pref";
 
-type Rates = { GBP: number; USD: number };
+type Rates = { GBP: number; USD: number; AUD: number; NZD: number; CAD: number };
+
+const FALLBACK_RATES: Rates = { GBP: 0.85, USD: 1.08, AUD: 1.63, NZD: 1.78, CAD: 1.47 };
 
 type UseCurrencyReturn = {
   currency: Currency;
@@ -28,8 +30,8 @@ export function useCurrency(): UseCurrencyReturn {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY) as Currency | null;
-      if (saved === "EUR" || saved === "GBP" || saved === "USD") setCurrencyState(saved);
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (isCurrency(saved)) setCurrencyState(saved);
     } catch {}
   }, []);
 
@@ -41,11 +43,17 @@ export function useCurrency(): UseCurrencyReturn {
         const res = await fetch("/api/currency/rate", { cache: "no-store" });
         const data = await res.json();
         if (mounted && data?.rates) {
-          setRates({ GBP: Number(data.rates.GBP) || 0.85, USD: Number(data.rates.USD) || 1.08 });
+          setRates({
+            GBP: Number(data.rates.GBP) || FALLBACK_RATES.GBP,
+            USD: Number(data.rates.USD) || FALLBACK_RATES.USD,
+            AUD: Number(data.rates.AUD) || FALLBACK_RATES.AUD,
+            NZD: Number(data.rates.NZD) || FALLBACK_RATES.NZD,
+            CAD: Number(data.rates.CAD) || FALLBACK_RATES.CAD,
+          });
           setRateIsLive(!!data?.live);
         }
       } catch {
-        if (mounted) setRates({ GBP: 0.85, USD: 1.08 });
+        if (mounted) setRates(FALLBACK_RATES);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -55,14 +63,13 @@ export function useCurrency(): UseCurrencyReturn {
   }, []);
 
   const setCurrency = useCallback((c: Currency) => {
-    setCurrencyState(c);
-    try { localStorage.setItem(STORAGE_KEY, c); } catch {}
+    setCurrencyState(coerceCurrency(c));
+    try { localStorage.setItem(STORAGE_KEY, coerceCurrency(c)); } catch {}
   }, []);
 
   const getRate = useCallback((to: Currency): number => {
     if (to === "EUR") return 1;
-    if (to === "GBP") return rates?.GBP ?? 0.85;
-    return rates?.USD ?? 1.08;
+    return rates?.[to] ?? FALLBACK_RATES[to];
   }, [rates]);
 
   const convertFromEur = useCallback((amountEur: number): number => {
@@ -71,10 +78,9 @@ export function useCurrency(): UseCurrencyReturn {
 
   const fmt = useCallback((amountEur: number | null | undefined): string => {
     if (amountEur == null || isNaN(amountEur)) return "—";
+    if (currency === "EUR") return formatEUR(amountEur);
     const converted = Math.round(amountEur * getRate(currency) * 100) / 100;
-    if (currency === "GBP") return formatGBP(converted);
-    if (currency === "USD") return formatUSD(converted);
-    return formatEUR(amountEur);
+    return formatMoney(converted, currency);
   }, [currency, getRate]);
 
   return {
