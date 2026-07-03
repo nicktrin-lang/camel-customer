@@ -1097,3 +1097,106 @@ Questions pending with Stripe Sales:
 - **`tsc --noEmit` after every change; commit per logical unit.** Widening a shared type surfaces every hardcoded consumer — use tsc as the checklist.
 - **Terminal command output frequently pasted back empty this session** — screenshots came through reliably. If a paste is blank, screenshot the terminal.
 - Git commits show a "committer name/email not configured" notice — harmless; commits succeed. (Optionally `git config --global user.name/user.email` to silence.)
+
+---
+
+## Chat 57 — Revert recovery + outreach conversion diagnosis + signup banner [Jul 4 2026]
+
+Stable tag: `v-stable-chat57` (camel-portal). Most of this session was (1) recovering an accidental
+revert of the entire Chat 56 portal session, and (2) diagnosing why partner outreach converts poorly
+and shipping a fix to the signup page. camel-customer was NOT affected by the revert and was not
+changed this session (still at `v-stable-chat56`).
+
+### 1. Accidental revert of all Chat 56 work — RECOVERED
+- Symptom: after asking a previous chat for a "safe rollback + handover update", `git log` showed a
+  stack of 13 `Revert "..."` commits on `origin/main` (all authored 22:06 same batch) that had backed
+  out EVERY Chat 56 portal commit — the 6-currency phases (0–4), Stripe connect hardening, AU city
+  list, and the mobile language-switcher work. `grep` confirmed the code was gone from disk
+  (`CURRENCIES`=0, `COUNTRY_CURRENCY`=0). This was NOT intentional — a "rollback" request had been
+  executed as `git revert` of the commits rather than a tag.
+- Recovery: identified last good commit `19a971a` (end-of-Chat-56, "Add Australia + fuller city
+  list…"). Tagged the broken tip as `backup-before-restore-chat56` (safety net), then
+  `git reset --hard 19a971a`, cherry-picked back the one legit post-revert commit (the `.gitignore`
+  `*.bak` change `5c0da15`), verified code was restored on disk (`CURRENCIES`=3 etc.), then
+  `git push --force-with-lease origin main`. Re-tagged `v-stable-chat56` properly.
+- **Vercel gotcha (important):** even after `main` was fixed, the live site still served the OLD
+  reverted build because Vercel had auto-promoted a *revert* commit to Production. Git being correct
+  does NOT mean production is correct. Fix: promote the correct deployment (`19a971a`) in the Vercel
+  dashboard. LESSON: after any history recovery, check the Vercel **Production badge is on a good
+  commit**, not just that git/`main` is right.
+- **LESSON (headline):** a "safe rollback" means create a `git tag` (changes nothing) — NEVER
+  `git revert` the commits (backs out working code). A tag is a bookmark; a revert is a deletion.
+
+### 2. Outreach conversion diagnosis (GA4)
+Outreach was ~616 sent, ~207 opens (34%), ~36 clicks, but only 2 signups. Investigated the whole
+funnel:
+- **List is clean.** `SELECT country, COUNT(*) FROM outreach_prospects GROUP BY country` = 1,449
+  Spain, 1 UK. The "opens from Netherlands/Ireland" the user worried about are Apple Mail Privacy /
+  corporate-scanner PROXY opens (they geolocate to Irish/Dutch datacentres), not real non-Spanish
+  companies. Email open/click geo is unreliable for this reason; click counts are also inflated by
+  proxy pre-fetch, so real human clicks < 36.
+- **The drop is click → signup-form, not form abandonment.** GA4 funnel showed `/partner/signup`
+  reached by only ~4 users over 90 days with **~4–9 second** engagement (a bounce), and
+  `/partner/application-submitted` ~2–3 users (= the 2 real signups). The homepage (`/`) gets real
+  prospect traffic (33s engagement) and tells the story well — but Step 1 of signup was a cold,
+  context-free form that killed the momentum.
+- **Open lead for next session:** `/partner/login` was getting ~3.5× MORE outreach traffic than
+  `/partner/signup` (35 vs 10 views). New prospects shouldn't be hitting login — they have no
+  account. Likely CTA ambiguity (homepage "Partner login" button next to "Apply", or email wording).
+  Worth investigating — could be an easy conversion win.
+
+### 3. GA4 saved-report gotcha (for future analytics work)
+- Temporary filters in standard **Reports** (the filter chip) do NOT persist on save — GA4 clears
+  them; only report structure (dimensions/metrics/date) saves. To keep a filtered view: use a
+  **Comparison** (persists in Reports, shows alongside All Users) OR build it in **Explore**
+  (filters persist fully — preferred).
+- Built a permanent Explore exploration named **"Outreach Journey"** (Free-form): rows = Page path,
+  values = Views + Avg engagement time, filters = `Session campaign exactly matches founding-partner`
+  AND `Page path does not match regex .*(admin|driver|/partner/(dashboard|bookings|requests|reports|
+  drivers|fleet|profile|settings|account|onboarding)).*`. Reopen after each batch to see the clean
+  prospect funnel. NOTE on the regex: anchored `/(admin|driver)` did NOT reliably match; the
+  `.*(...).* ` form does.
+- **Internal Traffic filter:** created in Chat 52 but check it's set to **Active**, not **Testing**
+  (Admin → Data settings → Data filters). In Testing it does nothing. It is not retroactive. (This is
+  why the user's own traffic still appeared in older reports.) For outreach analysis it barely matters
+  — filter by `session campaign = founding-partner`; you don't click your own outreach emails
+  (except the test prospects nicktrin+101/+102, which DO pollute the campaign bucket — hence the
+  page-path exclusion above).
+
+### 4. Signup Step 1 fix — founding-partner banner (SHIPPED)
+Root cause of the 4-second signup bounce: the excellent, story-rich homepage handed prospects to a
+naked Step-1 form with zero reinforcement of the pitch. Fix = a bold reassurance banner.
+- `app/partner/signup/page.tsx`: widened both `max-w-2xl` containers (header + card) to `max-w-4xl`;
+  inserted a full-width **orange banner at the TOP of the card, above the ProgressBar** (so it shows
+  on ALL 5 steps by design — reinforces free/quick throughout). Banner = "FOUNDING PARTNER INVITATION"
+  label + three white cards: **FREE TO JOIN** / No monthly fees, ever · **5 MINUTES** / Quick and
+  simple to apply · **MORE BOOKINGS** / Alongside your existing business.
+- Deliberately DROPPED from earlier drafts (per user, marketing calls): commission % (it's a negative
+  — don't advertise your cut), "100% fuel to you" (confusing to a cold reader), and any Spain
+  reference (keeps it universal / non-dating). No € shown.
+- i18n: reused/rewrote `signup.step1.reassure.*` keys (founding, stat1–3, sub1–3) across all 6
+  locales (en/es/fr/it/pt/de). No logic, validation, GA tracking, or API touched — copy + layout only.
+- Delivery method: pure-ASCII `python3 << 'PYEOF'` heredocs (backup + anchor-count assert + abort on
+  mismatch), `npx tsc --noEmit` clean before each deploy. Backups `.chat57*.bak` (swept at end).
+
+### To measure whether it worked
+Reopen the "Outreach Journey" Explore after the next send batch and watch:
+- `/partner/signup` **avg engagement time** — was ~4s; should climb if the banner reduces the bounce.
+- `/partner/application-submitted` **count** — the real success metric (was ~2). Small numbers — give
+  it a batch or two before judging.
+
+### Housekeeping done this session
+- `.bak` sweep + `*.bak` added to `.gitignore` (both repos) — early in session.
+- Handover `.md` committed to both repos (Chat 56 section had been uncommitted on disk).
+- `v-stable-chat56` tagged on BOTH repos (was missing); `v-stable-chat57` on camel-portal.
+- Safety tag `backup-before-restore-chat56` still on the old broken portal tip — deletable once
+  confident (`git tag -d backup-before-restore-chat56`, local only, never pushed).
+
+### Still open / next session
+- **Investigate `/partner/login` >> `/partner/signup` outreach traffic** (CTA ambiguity — likely
+  quick win).
+- Carried from Chat 56: Stripe Global Payouts for AU/NZ (blocked on Stripe Sales reply); live
+  German-email test; partner new-request alert live test (run null-coords audit SQL first);
+  `bookings/[id]` language-switcher spot-check; middleware auth gate; commission-invoice VAT; Xero
+  endpoint; US-market items.
+
