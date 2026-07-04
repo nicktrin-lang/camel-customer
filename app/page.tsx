@@ -163,6 +163,12 @@ function CustomerHome() {
   const [additionalDrivers,    setAdditionalDrivers]    = useState(0);
   const [additionalDriverAges, setAdditionalDriverAges] = useState<string[]>([]);
 
+  // Vehicle preferences (informational, not part of matching)
+  const [transmission, setTransmission] = useState<string>("");
+  const [seatInfant,   setSeatInfant]   = useState(0);
+  const [seatToddler,  setSeatToddler]  = useState(0);
+  const [seatBooster,  setSeatBooster]  = useState(0);
+
   const [pickupResults,  setPickupResults]  = useState<AddressResult[]>([]);
   const [dropoffResults, setDropoffResults] = useState<AddressResult[]>([]);
   const [pickupLoading,  setPickupLoading]  = useState(false);
@@ -327,6 +333,10 @@ function CustomerHome() {
           driver_age: driverAgeNum,
           additional_drivers: additionalDrivers,
           additional_driver_ages: additionalDriverAges.join(","),
+          pref_transmission: transmission || null,
+          pref_child_seats: (seatInfant + seatToddler + seatBooster) > 0
+            ? { infant: seatInfant, toddler: seatToddler, booster: seatBooster }
+            : null,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -658,6 +668,36 @@ function CustomerHome() {
                 <label className={labelCls}>{t("home.sportEquipment")}</label>
                 <select value={sportEquipment} onChange={e => setSportEquipment(e.target.value)} className={selectCls}>
                   {SPORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Vehicle preferences: transmission + child seats */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
+              <div>
+                <label className={labelCls}>{t("home.transmission")}</label>
+                <select value={transmission} onChange={e => setTransmission(e.target.value)} className={selectCls}>
+                  <option value="">{t("home.transmission.any")}</option>
+                  <option value="automatic">{t("home.transmission.automatic")}</option>
+                  <option value="manual">{t("home.transmission.manual")}</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t("home.childSeats.infant")}</label>
+                <select value={seatInfant} onChange={e => setSeatInfant(Number(e.target.value))} className={selectCls}>
+                  {[0,1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t("home.childSeats.toddler")}</label>
+                <select value={seatToddler} onChange={e => setSeatToddler(Number(e.target.value))} className={selectCls}>
+                  {[0,1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{t("home.childSeats.booster")}</label>
+                <select value={seatBooster} onChange={e => setSeatBooster(Number(e.target.value))} className={selectCls}>
+                  {[0,1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
               </div>
             </div>
