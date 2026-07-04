@@ -57,7 +57,8 @@ export async function GET(req: Request) {
         passengers, suitcases, hand_luggage, sport_equipment,
         vehicle_category_slug, vehicle_category_name,
         notes, status, created_at, expires_at, currency,
-        driver_age, additional_drivers, additional_driver_ages
+        driver_age, additional_drivers, additional_driver_ages,
+        pref_transmission, pref_child_seats
       `)
       .eq("customer_user_id", customerUser.id)
       .order("created_at", { ascending: false });
@@ -101,6 +102,18 @@ export async function POST(req: Request) {
     const additional_drivers     = Math.min(4, Math.max(0, Number(body?.additional_drivers || 0)));
     const additional_driver_ages = String(body?.additional_driver_ages || "").trim();
 
+    // Vehicle preferences (informational, not part of matching)
+    const pref_transmission_raw = String(body?.pref_transmission || "").trim().toLowerCase();
+    const pref_transmission = (pref_transmission_raw === "automatic" || pref_transmission_raw === "manual") ? pref_transmission_raw : null;
+    const cs = body?.pref_child_seats;
+    const clampSeat = (v: any) => Math.min(3, Math.max(0, Number(v || 0) || 0));
+    const pref_child_seats = (cs && typeof cs === "object")
+      ? (() => {
+          const infant = clampSeat(cs.infant), toddler = clampSeat(cs.toddler), booster = clampSeat(cs.booster);
+          return (infant + toddler + booster) > 0 ? { infant, toddler, booster } : null;
+        })()
+      : null;
+
     // Validations
     if (!pickup_address)  return NextResponse.json({ error: "Pickup is required" }, { status: 400 });
     if (pickup_lat === null || pickup_lng === null) return NextResponse.json({ error: "Pickup coordinates are required" }, { status: 400 });
@@ -140,6 +153,8 @@ export async function POST(req: Request) {
         driver_age,
         additional_drivers,
         additional_driver_ages: additional_driver_ages || null,
+        pref_transmission,
+        pref_child_seats,
       })
       .select(`id, job_number, passengers, suitcases, hand_luggage, vehicle_category_slug, pickup_lat, pickup_lng, expires_at`)
       .single();
