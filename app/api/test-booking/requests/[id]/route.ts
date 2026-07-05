@@ -36,7 +36,8 @@ export async function GET(
         pickup_at, dropoff_at, journey_duration_minutes, passengers,
         suitcases, hand_luggage, sport_equipment, vehicle_category_name, notes,
         status, created_at, expires_at,
-        driver_age, additional_drivers, additional_driver_ages
+        driver_age, additional_drivers, additional_driver_ages,
+        pref_transmission, pref_child_seats
       `)
       .eq("id", id)
       .eq("customer_user_id", customerUser.id)

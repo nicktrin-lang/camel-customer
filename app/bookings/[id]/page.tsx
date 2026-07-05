@@ -19,6 +19,8 @@ type RequestData = {
   driver_age: number|null;
   additional_drivers: number;
   additional_driver_ages: string|null;
+  pref_transmission: string|null;
+  pref_child_seats: { infant?: number; toddler?: number; booster?: number }|null;
 };
 type BidRow = {
   id: string; partner_user_id: string; partner_company_name: string|null;
@@ -538,6 +540,15 @@ function ReceiptDownloadButton({ bookingId, accessToken }: { bookingId: string; 
   );
 }
 
+function custChildSeatsLabel(cs: { infant?: number; toddler?: number; booster?: number }|null, t: (k: string) => string): string {
+  if (!cs) return "—";
+  const p: string[] = [];
+  if (cs.infant)  p.push(`${cs.infant} ${t("home.childSeats.infantWord")}`);
+  if (cs.toddler) p.push(`${cs.toddler} ${t("home.childSeats.toddlerWord")}`);
+  if (cs.booster) p.push(`${cs.booster} ${t("home.childSeats.boosterWord")}`);
+  return p.length ? p.join(", ") : "—";
+}
+
 export default function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase     = useMemo(()=>createCustomerBrowserClient(),[]);
   const router       = useRouter();
@@ -792,6 +803,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
                 [t("booking.details.duration"),          formatDuration(req.journey_duration_minutes)],
                 [t("home.passengers"),                   req.passengers],
                 [t("home.suitcases"),                    req.suitcases],
+                [t("home.transmission"),                 req.pref_transmission === "automatic" ? t("home.transmission.automatic") : req.pref_transmission === "manual" ? t("home.transmission.manual") : "—"],
+                [t("home.childSeats"),                   custChildSeatsLabel(req.pref_child_seats, t)],
                 [t("booking.details.sportEquipment"),    sportEquipmentLabel(req.sport_equipment)],
                 [t("booking.details.vehicle"),           req.vehicle_category_name||"—"],
                 [t("home.mainDriverAge"),                req.driver_age ?? "—"],
