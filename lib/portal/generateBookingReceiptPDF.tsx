@@ -112,6 +112,21 @@ function sportEquipmentLabel(v: string | null | undefined): string {
   return map[v] || v;
 }
 
+function transmissionLabel(v: string | null | undefined): string {
+  if (v === "automatic") return "Automatic";
+  if (v === "manual") return "Manual";
+  return "-";
+}
+
+function childSeatsLabel(v: any): string {
+  if (!v || typeof v !== "object") return "-";
+  const parts: string[] = [];
+  if (Number(v.infant)  > 0) parts.push(`${Number(v.infant)} infant`);
+  if (Number(v.toddler) > 0) parts.push(`${Number(v.toddler)} toddler`);
+  if (Number(v.booster) > 0) parts.push(`${Number(v.booster)} booster`);
+  return parts.length ? parts.join(", ") : "-";
+}
+
 interface ReceiptData {
   jobNumber:              number | null;
   bookingId:              string;
@@ -140,6 +155,8 @@ interface ReceiptData {
   additionalDriverAges:   string | null;
   mileageLimit:           string | null;
   securityDepositNotes:   string | null;
+  prefTransmission:       string | null;
+  prefChildSeats:         any | null;
 }
 
 function ChecklistItem({ title, desc }: { title: string; desc: string }) {
@@ -264,6 +281,14 @@ function ReceiptDocument({ d }: { d: ReceiptData }) {
               <Text style={s.rowLabel}>Additional drivers</Text>
               <Text style={s.rowValue}>{additionalDriversText}</Text>
             </View>
+            <View style={s.row}>
+              <Text style={s.rowLabel}>Transmission</Text>
+              <Text style={s.rowValue}>{transmissionLabel(d.prefTransmission)}</Text>
+            </View>
+            <View style={s.row}>
+              <Text style={s.rowLabel}>Child seats</Text>
+              <Text style={s.rowValue}>{childSeatsLabel(d.prefChildSeats)}</Text>
+            </View>
           </View>
 
           {/* Payment */}
@@ -384,6 +409,8 @@ export interface GenerateBookingReceiptParams {
   additionalDriverAges?:  string | null;
   mileageLimit?:          string | null;
   securityDepositNotes?:  string | null;
+  prefTransmission?:      string | null;
+  prefChildSeats?:        any | null;
   locale?:                "en" | "es" | "fr" | "it" | "pt" | "de";
 }
 
@@ -426,6 +453,8 @@ export async function generateBookingReceiptPDF(params: GenerateBookingReceiptPa
     additionalDriverAges: params.additionalDriverAges ?? null,
     mileageLimit:         params.mileageLimit ?? null,
     securityDepositNotes: params.securityDepositNotes ?? null,
+    prefTransmission:     params.prefTransmission ?? null,
+    prefChildSeats:       params.prefChildSeats ?? null,
   };
 
   const pdfBuffer = await renderToBuffer(<ReceiptDocument d={data} />);
