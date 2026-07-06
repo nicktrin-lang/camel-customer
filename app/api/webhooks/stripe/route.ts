@@ -233,7 +233,8 @@ export async function POST(req: NextRequest) {
           journey_duration_minutes,
           vehicle_category_name,
           passengers, suitcases, hand_luggage, sport_equipment,
-          driver_age, additional_drivers, additional_driver_ages
+          driver_age, additional_drivers, additional_driver_ages,
+          pref_transmission, pref_child_seats
         `)
         .eq("id", requestId)
         .maybeSingle();
@@ -277,6 +278,8 @@ export async function POST(req: NextRequest) {
             notes,
             job_number:            jobNumber,
             payout_status:         "held",
+            pref_transmission:     request?.pref_transmission ?? null,
+            pref_child_seats:      request?.pref_child_seats ?? null,
           })
           .select("id")
           .single();
@@ -389,6 +392,8 @@ export async function POST(req: NextRequest) {
           additionalDriverAges: request.additional_driver_ages ?? null,
           mileageLimit:         bid?.mileage_limit ?? null,
           securityDepositNotes: bid?.security_deposit_notes ?? null,
+          prefTransmission:     request.pref_transmission ?? null,
+          prefChildSeats:       request.pref_child_seats ?? null,
         }).catch(e => console.error("Booking receipt PDF email failed:", e?.message));
       }
 
