@@ -61,6 +61,21 @@ function fmtDuration(minutes: number | null | undefined): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+function transmissionLabel(v: string | null | undefined): string {
+  if (v === "automatic") return "Automatic";
+  if (v === "manual") return "Manual";
+  return "-";
+}
+
+function childSeatsLabel(v: any): string {
+  if (!v || typeof v !== "object") return "-";
+  const parts: string[] = [];
+  if (Number(v.infant)  > 0) parts.push(`${Number(v.infant)} infant`);
+  if (Number(v.toddler) > 0) parts.push(`${Number(v.toddler)} toddler`);
+  if (Number(v.booster) > 0) parts.push(`${Number(v.booster)} booster`);
+  return parts.length ? parts.join(", ") : "-";
+}
+
 const s = StyleSheet.create({
   page:        { fontFamily: "Helvetica", fontSize: 9, color: "#222", backgroundColor: "#fff", paddingBottom: 40 },
   topBar:      { backgroundColor: "#ff7a00", height: 8 },
@@ -121,6 +136,8 @@ export interface CompletionStatementParams {
   usedQuarters:           number;
   fuelCharge:             number;
   fuelRefund:             number;
+  prefTransmission?:      string | null;
+  prefChildSeats?:        any | null;
   issuedAt:               string;
   postCompletionRefunds?: PostCompletionRefund[];
 }
@@ -184,6 +201,8 @@ function StatementDocument({ p, logoBase64 }: { p: CompletionStatementParams; lo
             {p.vehicleCategory ? (
               <View style={s.row}><Text style={s.rowLabel}>Vehicle</Text><Text style={s.rowValue}>{p.vehicleCategory}</Text></View>
             ) : null}
+            <View style={s.row}><Text style={s.rowLabel}>Transmission</Text><Text style={s.rowValue}>{transmissionLabel(p.prefTransmission)}</Text></View>
+            <View style={s.row}><Text style={s.rowLabel}>Child seats</Text><Text style={s.rowValue}>{childSeatsLabel(p.prefChildSeats)}</Text></View>
             <View style={s.row}><Text style={s.rowLabel}>Settlement currency</Text><Text style={s.rowValue}>{cur}</Text></View>
           </View>
 
