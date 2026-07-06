@@ -174,7 +174,7 @@ export async function POST(req: Request) {
     if (partnerUserIds.length > 0) {
       const { data: profileRows, error: profileErr } = await db
         .from("partner_profiles")
-        .select(`user_id, company_name, role, base_lat, base_lng, service_radius_km, communication_locale`)
+        .select(`user_id, company_name, role, base_lat, base_lng, service_radius_km, communication_locale, base_address, default_currency, vat_number`)
         .in("user_id", partnerUserIds);
       if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 400 });
       partnerProfileMap = new Map((profileRows||[]).map((r:any) => [String(r.user_id), r]));
@@ -208,23 +208,40 @@ export async function POST(req: Request) {
     }
 
     // ── Restrict to LIVE partners only ────────────────────────────────────
-    // A partner is "live" when partner_applications.status === "live" (set by
-    // refreshPartnerLiveStatus / make-live). Only live partners are matched to
+    // A partner is matchable only when their application is APPROVED and they
+    // pass full live-readiness (same checks as camel-portal
+    // refreshPartnerLiveStatus). "live" is COMPUTED here, never a status value.
+    // Only approved, fully-onboarded partners are matched to
     // — and emailed about — a new request. partner_applications also holds the
     // partner's contact email.
     const eligibleIds = Array.from(eligiblePartners.keys());
     const liveAppMap = new Map<string, { email: string | null }>();
 
     if (eligibleIds.length > 0) {
-      const { data: appRows, error: appErr } = await db
-        .from("partner_applications")
-        .select(`user_id, email, status`)
-        .in("user_id", eligibleIds);
-      if (appErr) return NextResponse.json({ error: appErr.message }, { status: 400 });
-      for (const a of appRows || []) {
-        if (String(a.status || "").trim().toLowerCase() === "live") {
-          liveAppMap.set(String(a.user_id), { email: a.email ?? null });
-        }
+      const [appRes, driverRes] = await Promise.all([
+        db.from("partner_applications").select(`user_id, email, status`).in("user_id", eligibleIds),
+        db.from("partner_drivers").select(`partner_user_id`).eq("is_active", true).in("partner_user_id", eligibleIds),
+      ]);
+      if (appRes.error)    return NextResponse.json({ error: appRes.error.message }, { status: 400 });
+      if (driverRes.error) return NextResponse.json({ error: driverRes.error.message }, { status: 400 });
+
+      const activeDriverSet = new Set((driverRes.data || []).map((d: any) => String(d.partner_user_id)));
+      const hasText = (v: unknown) => String(v || "").trim().length > 0;
+
+      for (const a of appRes.data || []) {
+        const uid = String(a.user_id);
+        // Approved application is the gate; "live" is NOT a status value.
+        if (String(a.status || "").trim().toLowerCase() !== "approved") continue;
+        const profile = partnerProfileMap.get(uid);
+        if (!profile) continue;
+        // Full live-readiness (mirrors refreshPartnerLiveStatus): active driver,
+        // base_address, default_currency, vat_number. Active fleet-in-category,
+        // base_lat/base_lng and radius are already ensured by the loop above.
+        if (!activeDriverSet.has(uid))          continue;
+        if (!hasText(profile.base_address))     continue;
+        if (!hasText(profile.default_currency)) continue;
+        if (!hasText(profile.vat_number))       continue;
+        liveAppMap.set(uid, { email: a.email ?? null });
       }
     }
 
