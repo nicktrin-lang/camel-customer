@@ -50,7 +50,8 @@ export async function GET(
       fuel_used_quarters, fuel_charge, fuel_refund,
       post_completion_refund_total,
       collection_fuel_level_partner, collection_fuel_level_driver,
-      return_fuel_level_partner, return_fuel_level_driver
+      return_fuel_level_partner, return_fuel_level_driver,
+      pref_transmission, pref_child_seats
     `)
     .eq("id", bookingId)
     .maybeSingle();
@@ -128,6 +129,8 @@ export async function GET(
       usedQuarters:         bk.fuel_used_quarters ?? 0,
       fuelCharge:           Number(bk.fuel_charge || 0),
       fuelRefund:           Number(bk.fuel_refund || 0),
+      prefTransmission:     (bk as any).pref_transmission ?? null,
+      prefChildSeats:       (bk as any).pref_child_seats ?? null,
       issuedAt:             new Date().toISOString(),
       postCompletionRefunds,
     });
