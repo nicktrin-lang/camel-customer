@@ -1345,3 +1345,180 @@ session: `*.chat57*.bak` (gitignored; sweep when convenient).
    production bug (real partners never matching). Read the actual code, don't assume. Highest priority.
 3. Finish vehicle preferences: the 3 document surfaces (webhook + 2 PDFs + localised email) — section 5.
 4. If time: the `/partner/login` vs `/partner/signup` CTA leak.
+
+## Chat 58 — Vehicle preferences: document surfaces completed [Jul 6 2026]
+
+Finished the transmission + child-seats feature that was ~60% done at end of Chat 57.
+The interactive path (form → DB → partner request view → customer booking page) was
+already live and verified on #1000173. This session added the three document surfaces,
+all threaded off the Stripe payment webhook. camel-customer only; portal untouched.
+
+Shipped (5 commits, all on origin/main, tsc clean, per-unit commits):
+- 81f9422 webhook (app/api/webhooks/stripe/route.ts): added pref_transmission,
+  pref_child_seats to the customer_requests select; store both on the partner_bookings
+  insert; pass both into sendBookingReceiptEmail. No charge/transfer/fee/currency logic
+  touched — purely additive plumbing of two nullable columns.
+- fac077c receipt PDF (lib/portal/generateBookingReceiptPDF.tsx): transmissionLabel +
+  childSeatsLabel helpers; widened ReceiptData + GenerateBookingReceiptParams; param
+  mapping; two rows in Journey Details (under Additional drivers). PDF ENGLISH (NTUK rule).
+- 249479d receipt email (same file): RC_PREF 6-locale map + conditional prefsBlock in the
+  email HTML. Block is OMITTED entirely when no transmission chosen AND all seat counts 0
+  (no empty box). Localised per communication_locale, EN fallback.
+- 767d325 completion PDF (lib/portal/generateCompletionStatementPDF.tsx): same two helpers;
+  widened CompletionStatementParams; two rows in Booking Details (before Settlement
+  currency). ENGLISH.
+- 1b69b13 completion route (app/api/test-booking/bookings/[id]/completion-statement/route.ts):
+  added the two columns to the partner_bookings select; passes them in as
+  (bk as any).pref_* ?? null (cast avoids needing regenerated Supabase types).
+
+Display format (matches request/booking pages): transmission -> "Automatic"/"Manual"/"-";
+child seats -> only types >0, e.g. "1 infant, 1 toddler, 1 booster", else "-".
+
+DB (done in Chat 57): customer_requests.pref_transmission text, .pref_child_seats jsonb;
+partner_bookings.pref_transmission text, .pref_child_seats jsonb. Shape:
+{"infant":1,"toddler":0,"booster":2} or null.
+
+Method: pure-ASCII python3 heredocs (accents \u-escaped), backup + count==1 assert +
+abort, tsc after each pair. Cross-file chicken-and-egg hit again (webhook sent the new
+props before the receipt type declared them — TS2353 until both applied; tsc once, on the
+pair). Backups: *.chat58.*.bak (gitignored).
+
+### VERIFY (not yet done — live payment-triggered):
+- [ ] Booking through payment WITH prefs: confirmation email shows prefs in customer's
+      language + receipt PDF shows them (English).
+- [ ] Completion statement for that booking: two English rows in Booking Details.
+- [ ] Empty case (customer chose nothing): PDFs show "-"; email prefs block ABSENT (no box).
+
+## Chat 58 — Vehicle preferences complete + status="live" matching regression FIXED [Jul 6 2026]
+
+Two things this session. Recommend tagging v-stable-chat58 on BOTH repos after the
+vehicle-prefs live test passes.
+
+### 1. Vehicle preferences (transmission + child seats) — COMPLETE
+Finished the ~60% feature from Chat 57. Added the three document surfaces off the Stripe
+webhook. camel-customer only. 5 commits, all on origin/main, tsc clean:
+- 81f9422 webhook: store pref_transmission/pref_child_seats on partner_bookings; pass to
+  receipt generator. No charge/transfer/fee/currency logic touched.
+- fac077c receipt PDF: two rows in Journey Details (ENGLISH, NTUK rule).
+- 249479d receipt email: RC_PREF 6-locale map + conditional prefsBlock (localised; block
+  OMITTED entirely when nothing chosen — no empty box).
+- 767d325 completion PDF: two rows in Booking Details (ENGLISH).
+- 1b69b13 completion route: read the two cols off partner_bookings, pass them in.
+Display format: transmission -> "Automatic"/"Manual"/"-"; child seats -> types >0 only,
+e.g. "1 infant, 1 toddler, 1 booster", else "-".
+DB cols (Chat 57): customer_requests + partner_bookings .pref_transmission text,
+.pref_child_seats jsonb ({"infant":n,"toddler":n,"booster":n} or null).
+STILL TO VERIFY: live payment run (locale=de booking -> German email + English PDF; empty case).
+
+### 2. status="live" matching regression — ROOT-CAUSED and FIXED (was the top carry-forward)
+THE CORRECT MODEL (write this down, do not re-break): partner_applications.status is ONLY
+pending / approved / rejected. "live" / "matchable" is a COMPUTED concept — the 8 checks in
+camel-portal/lib/portal/refreshPartnerLiveStatus.ts (service_radius_km>0, base_address,
+base_lat, base_lng, active fleet, active driver, default_currency, vat_number). The admin
+"Live Profile" badge is computed from these; it never read status. A partner matches when
+APPROVED **and** live-ready. status is NEVER "live".
+
+Root cause: Chat 55 commit 065b8de ("email live in-radius partners on new request") ADDED a
+gate `partner_applications.status === "live"` to the customer match loop — before that commit
+there was NO status gate at all. "live" was never a real status value, so the loop silently
+matched NOBODY. Chat 57 misdiagnosed a no-match as a missing enum value, added 'live' to the
+enum + flipped Test Cars, which cascaded into make-live/refreshPartnerLiveStatus writing
+status="live" and polluting Kingsman's Status badge. (The Chat 57 "correct model" note was
+right about the model but wrong to conclude the fix was done — the regression was still live.)
+
+Fix (2 commits + 1 SQL):
+- camel-customer 5effa55 (app/api/test-booking/requests/route.ts): match gate is now
+  APPROVED + full live-readiness (active driver + base_address + default_currency +
+  vat_number; fleet-in-category/coords/radius already ensured earlier in the loop). Pulled
+  the 3 extra profile fields into the select. Comment corrected.
+- camel-portal 20065cc (refreshPartnerLiveStatus.ts + make-live/route.ts): REMOVED the
+  status:"live" writes; keep stamping live_email_sent_at (that's what does email de-dup).
+  make-live's `currentStatus === "live"` guards are now dead branches — harmless, left as-is.
+- Supabase SQL (run AFTER both deploys): UPDATE partner_applications SET status='approved'
+  WHERE status='live';  -> flipped Kingsman back to approved.
+Deploy order that matters: customer match-loop FIRST, then portal, then SQL last (else a
+live row matches nothing in the gap).
+The inert 'live' enum label remains (Postgres can't easily drop it) — unused, do not write it.
+
+VERIFIED IN PRODUCTION: no rows with status='live'; all partners approved/pending; a new
+in-radius request matched Test Cars (approved + live-ready) with match_status="open".
+Kingsman = approved + Not live (fleet is_active=false) -> correctly does not match.
+
+### Still open (carried forward)
+- Vehicle-prefs live payment test (above).
+- Kingsman fleet is_active=false — reactivate for AU when Global Payouts lands.
+- Global Payouts AU/NZ (blocked on Stripe Sales); live German-email test; /partner/login vs
+  /partner/signup CTA leak; middleware auth gate; commission-invoice VAT; Xero; US-market.
+
+## Chat 58 — Global Payouts AU/NZ: questions ANSWERED, project scoped (not started) [Jul 6 2026]
+
+Supersedes the Chat 56 "Stripe corridor reality" + "5 questions pending" blocks — Stripe has
+now answered all five. AU/NZ payouts are a SEPARATE PARALLEL PIPELINE, not a variant of the
+existing destination-charge flow. NOTHING BUILT YET. Awaiting direct-email assistance from
+Stripe (requested this session) on commercial terms + formal AU/NZ activation before build.
+
+### Status of access
+- Global Payouts SETTINGS are accessible on the platform account (Camel Global Ltd) — feature
+  appears enabled, but NOT configured: both payout methods (Standard 2-3 days, Instant 30 min)
+  were toggled OFF in the dashboard. Nothing can move until at least Standard (local bank) is ON.
+- A support-channel mismatch happened first: the request came from a different Stripe account/
+  email (acct_1TpCHX...) than the platform account it's for (acct_1TggMl...); Stripe declined to
+  action cross-account for security and told us to enable from the dashboard while logged into the
+  correct account (done) OR re-submit signed in as the platform account's email. Step 1 worked.
+- GATING (Stripe-side, not code): (a) confirm FORMAL AU/NZ recipient activation (may need
+  Enhanced Due Diligence, 2-3 wks), (b) enable a payout method on the settings page, (c) direct-
+  email assistance requested for commercial terms/minimums/timeline — answers drive the batching
+  decision below. CONFIRM the Global-Payouts-enabled account is the SAME account the live
+  STRIPE_SECRET_KEY points at (the mismatch above is exactly this risk).
+
+### The 5 questions — ANSWERED by Stripe
+1. Access: UK platform CAN send to AU/NZ via Global Payouts (limited public preview). Formal
+   activation = identity verification + due-diligence questionnaire, a few business days.
+2. Recipient model: MUST create SEPARATE recipient objects (v2 Accounts API,
+   configuration.recipient). Existing Express Connect accounts CANNOT be reused. Cross-border
+   Connect (the 0.25% product) only works US/UK/EEA/Canada/Switzerland — NOT AU/NZ. Recipient-
+   service-agreement accounts can't receive cross-border Connect payouts.
+3. Onboarding data for AU/NZ recipients: identity (name, email, country, entity type, legal
+   business name), full address, bank details (BSB+account for AU; NZ account format), + method-
+   specific fields. Exact requirements returned DYNAMICALLY via requirements.entries in the
+   Accounts API response when you request capabilities.
+4. Payout methods AU/NZ: LOCAL BANK TRANSFER (preferred, cheapest — enable
+   configuration.recipient.capabilities.bank_accounts.local), wire (pricier), instant debit-card
+   (Visa Direct/Mastercard Send, needs card + DOB). Use local bank.
+5. Charge/payout flow + FX: FLOW CHANGES. NOT destination charges. Customer pays -> funds settle
+   to PLATFORM BALANCE -> create explicit OutboundPayment per booking, each preceded by an
+   OutboundPaymentQuote (FX rate + fees). Cross-border FX fees apply; local bank AU/NZ ~1-3 biz
+   days. THERE ARE PER-TRANSACTION MINIMUMS — for small per-booking amounts Stripe advises
+   BATCHING multiple bookings into one payout for the economics. (This is the key commercial
+   unknown the direct-email thread must pin down.)
+
+### Build plan (its own multi-session project — do NOT start at session end)
+Diverges by partner country (same decision point as stripeCountry()). Touches the most sensitive
+files (create-intent, webhook) — same discipline as the payment work this session.
+- PHASE 1 Onboarding fork: AU/NZ partners -> create a Global Payouts RECIPIENT (v2 Accounts API,
+  configuration.recipient, local bank capability) instead of an Express Connect account. Collect
+  BSB/account/address/entity dynamically from requirements.entries.
+- PHASE 2 Charge fork: AU/NZ bookings must NOT use transfer_data.destination. Charge to platform
+  balance. Touches create-intent + webhooks/stripe. In-corridor (EUR/GBP/USD/CAD) stays unchanged.
+- PHASE 3 Payout pipeline: OutboundPaymentQuote -> OutboundPayment per booking (or per batch),
+  reconciled against existing payout_status / payout_batch_id columns. DECIDE batching (per-booking
+  vs accumulate to clear minimums) from Stripe's commercial answers.
+- PHASE 4 Cron: monthly-payout cron assumes in-corridor destination transfers; add an AU/NZ branch
+  that runs OutboundPayments (respecting batching).
+
+### Kingsman implication (IMPORTANT — decision made this session)
+Kingsman (AU) is INTENTIONALLY left fully live/matchable (approved + all 8 live checks pass:
+fleet 2, driver 1, base_lat/lng, radius 300km, AUD, vat TFN588257928). It WILL match in-radius
+Adelaide requests, get the new-request email, bid and win. Customer CHARGE works. But there is NO
+automated payout path — AU is out-of-corridor and the Global Payouts pipeline above is NOT built.
+Any completed Kingsman booking must be settled MANUALLY (dashboard OutboundPayment) until Phase 3
+ships; do NOT expect the auto destination-transfer to fire (it can't reach AU). Also: Chat 56 left
+Kingsman stripe_account_id NULL after deleting its wrong-country Spanish acct — but note the new
+model means AU partners need a RECIPIENT object, not a Connect account, so the reconnect approach
+itself changes under Phase 1. Confirm what Kingsman actually has before relying on it.
+Kingsman user_id: 116fd343-a034-4153-ac33-34bf1fcd7153.
+- Global Payouts AU/NZ: 5 questions ANSWERED (see Chat 58 section). Awaiting Stripe direct-email
+  on commercial terms + formal AU/NZ activation. Then build as a 4-phase project (recipient
+  onboarding fork, platform-balance charge fork, OutboundPayment pipeline w/ batching, cron
+  branch). Enable a payout method (Standard/local bank) in the dashboard first. Kingsman is live
+  but UNPAYABLE until this ships — settle any AU booking manually.
