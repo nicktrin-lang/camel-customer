@@ -1042,6 +1042,8 @@ The **€10 minimum-commission floor** (stored EUR) now converts to bid currency
 
 ---
 
+> **SUPERSEDED by Chat 59 (Jul 8 2026).** The 0.25% cross-border fee below is WRONG for AU/NZ (real: AU ~1-3%, NZ ~0.5-2.5% depending on FX). See the Chat 59 Global Payouts section for corrected fees, all answered Stripe questions, and the full build plan.
+
 ## Stripe corridor reality (the AU/NZ payout blocker)
 
 - Your UK platform uses **destination charges** (customer pays → funds auto-transfer to partner's connected account). This works **in-corridor only**: US, UK, EEA, **Canada**, Switzerland.
@@ -1450,6 +1452,8 @@ Kingsman = approved + Not live (fleet is_active=false) -> correctly does not mat
 - Global Payouts AU/NZ (blocked on Stripe Sales); live German-email test; /partner/login vs
   /partner/signup CTA leak; middleware auth gate; commission-invoice VAT; Xero; US-market.
 
+> **SUPERSEDED by Chat 59 (Jul 8 2026).** The 0.25% cross-border fee below is WRONG for AU/NZ (real: AU ~1-3%, NZ ~0.5-2.5% depending on FX). See the Chat 59 Global Payouts section for corrected fees, all answered Stripe questions, and the full build plan.
+
 ## Chat 58 — Global Payouts AU/NZ: questions ANSWERED, project scoped (not started) [Jul 6 2026]
 
 Supersedes the Chat 56 "Stripe corridor reality" + "5 questions pending" blocks — Stripe has
@@ -1522,3 +1526,60 @@ Kingsman user_id: 116fd343-a034-4153-ac33-34bf1fcd7153.
   onboarding fork, platform-balance charge fork, OutboundPayment pipeline w/ batching, cron
   branch). Enable a payout method (Standard/local bank) in the dashboard first. Kingsman is live
   but UNPAYABLE until this ships — settle any AU booking manually.
+
+## Chat 59 — Global Payouts AU/NZ: fully scoped, unblocked, ready to build [Jul 8 2026]
+
+SUPERSEDES the Chat 56 "Stripe corridor reality" + Chat 58 "questions ANSWERED" blocks. Stripe has now answered ALL questions (both rounds). The fee numbers below OVERRIDE the "0.25%" figure from Chat 56/58 — that was WRONG for AU/NZ. Nothing built yet; project is fully unblocked (only remaining external steps are two dashboard toggles Nick does himself). Tag v-stable-chat59 on BOTH repos before Phase 1.
+
+### Headline model
+- In-corridor partners (EUR/GBP/USD/CAD — UK, EEA, US, Canada, Switzerland): stay on EXISTING flow — Express Connect + destination charges. Do NOT touch.
+- AU/NZ: OUT of corridor → separate parallel pipeline (Global Payouts). Country fork at the same point as stripeCountry() in app/api/partner/stripe/connect/route.ts.
+
+### Answers from Stripe (all confirmed)
+1. ACCOUNT CONFIRMED: Global Payouts is on the SAME live account the live secret key uses — Camel Global Ltd, account ID ending cs5n. Before any live payout, verify STRIPE_SECRET_KEY resolves to ...cs5n. (Retires the old acct_1TpCHX vs acct_1TggMl mismatch worry.)
+2. DASHBOARD TASK 1 (Nick, no code): Settings → Global Payouts → Payout methods → enable Local network (bank_accounts.local). Nothing pays out until this is on. No extra eligibility/activation gate.
+3. Recipient model: AU/NZ MUST be separate recipient objects (v2 Accounts API, configuration.recipient, bank_accounts.local). Express Connect accounts CANNOT be reused. Required fields come back dynamically in requirements.entries — don't hardcode. Stripe-hosted form = least build.
+4. Flow: NO destination charges for AU/NZ. Customer pays → charge settles to platform balance → OutboundPaymentQuote (locks FX) → OutboundPayment to recipient local bank. Local bank ~1–7 days.
+5. Refunds (RESHAPES REFUND CODE): Global Payouts is decoupled — NO auto transfer reversal. Refund the customer against the charge (debits platform balance) normally, but recovering from the partner is on US (deduct from next payout via ledger, or invoice). Payout in processing = cancelable; posted = final; returned (bad bank details) = auto-returns to financial account.
+6. Webhooks: outbound_payment.created / .posted / .failed / .canceled / .returned / .updated. Store booking ID in OutboundPayment metadata for reconciliation.
+7. Funding (DASHBOARD TASK 2, Nick, no code): Balances → financial account → Recurring transfers → Automatic, daily, "transfer all revenue". Internal transfers immediate + free; only available/settled funds move (natural T+n lag, pairs with batching).
+
+### Corrected fees (Camel absorbs partner Stripe fees — customer-pays-in-partner-currency exists to avoid FX)
+Two cases per AU/NZ payout:
+- NO-FX (the intent): hold AUD/NZD in a multi-currency platform balance, pay out SAME-CURRENCY → no 2% FX. Cost = cross-border + £0.50 standard. AU ≈ 1.0% + £0.50; NZ ≈ 0.5% + £0.50.
+- WORST CASE (a GBP↔AUD/NZD conversion happens): add 2% FX. AU ≈ 3.0% + £0.50; NZ ≈ 2.5% + £0.50.
+CRUX QUESTION (confirm with Stripe / balance settings): does an AUD separate-charge settle AS AUD (multi-currency balance) so we can pay out same-currency and skip the 2% FX? Decides ~1% vs ~3%. Build to hold + pay same-currency regardless; confirm so reported fees/margin are right.
+MINIMUM: ~one base unit each currency (≈ A$1/NZ$1). Does NOT force batching — batching only compresses the fixed £0.50, an economics choice not a requirement.
+
+### NEW REQUIREMENT — Camel absorbs ALL Stripe fees → report in admin reports
+Capture per booking, forward from Phase 5 go-live (historical backfill optional). Fee types: card processing fee (every booking, from the charge's balance-transaction fee — currently NOT reported) + AU/NZ payout fees (£0.50 + cross-border % + FX % only if conversion). Store partner_bookings.stripe_fee_total numeric + stripe_fee_breakdown jsonb (incl. currency). Reports aggregate per-currency alongside revenue/commission (same CURRENCIES loop); add "Stripe fees (absorbed)" + derived "Camel net margin = commission − fees" + CSV. NEVER sum fees across currencies.
+
+### DB schema (Supabase, additive/nullable)
+ALTER TABLE partner_profiles ADD COLUMN stripe_recipient_id text;
+ALTER TABLE partner_profiles ADD COLUMN payout_rail text DEFAULT 'connect'; -- 'connect' | 'global_payouts'
+ALTER TABLE partner_bookings ADD COLUMN charge_model text DEFAULT 'destination'; -- 'destination' | 'separate'
+ALTER TABLE partner_bookings ADD COLUMN outbound_payment_id text;
+ALTER TABLE partner_bookings ADD COLUMN outbound_quote_id text;
+ALTER TABLE partner_bookings ADD COLUMN stripe_fee_total numeric DEFAULT 0;
+ALTER TABLE partner_bookings ADD COLUMN stripe_fee_breakdown jsonb;
+CREATE TABLE partner_recovery_ledger (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), partner_user_id uuid, booking_id uuid REFERENCES partner_bookings(id), amount numeric NOT NULL, currency text NOT NULL, reason text, status text DEFAULT 'outstanding', created_at timestamptz DEFAULT now());
+-- existing payout_status / payout_batch_id reused.
+
+### Build plan (multi-session; test mode end-to-end before real money; pure-ASCII heredocs, backup+assert, tsc, per-unit commits, verify live)
+DASHBOARD PRE-WORK (Nick): enable Local network; set up recurring daily transfers; confirm STRIPE_SECRET_KEY = ...cs5n.
+- PHASE 1 (portal) Recipient onboarding fork: app/api/partner/stripe/connect/route.ts — base_country ∈ {AU,NZ} → create v2 recipient (write stripe_recipient_id + payout_rail='global_payouts'), else existing Connect. Partner "Connect Stripe" UI (profile/onboarding) branches on payout_rail.
+- PHASE 2 (customer) Charge fork: app/api/payments/create-intent/route.ts — payout_rail='global_payouts' → PaymentIntent WITHOUT transfer_data.destination/on_behalf_of, charge_model='separate'; in-corridor unchanged. webhooks/stripe: persist charge_model.
+- PHASE 3 (portal+customer) OutboundPayment pipeline + refund fork: Quote→Payment, booking ID in metadata, store outbound_payment_id/quote_id/payout_status/batch_id; webhook handles the 6 events + captures payout fees. Refund fork in completeBooking.tsx + admin/bookings/[id]/post-refund/route.ts — AU/NZ: refund customer + write partner_recovery_ledger row (net commission already taken); in-corridor byte-unchanged.
+- PHASE 4 (portal) Cron branch: app/cron/monthly-payout/route.ts — add AU/NZ OutboundPayment branch (respect batching); funding handled by dashboard recurring transfer; guard insufficient balance.
+- PHASE 5 (portal) Fee capture + admin reporting: card fee from balance transaction in webhooks/stripe on charge success; payout fees in the OutboundPayment handler; app/admin/reports/page.tsx (+ admin/bookings reporting) per-currency stripe_fee_total accumulator, "Stripe fees (absorbed)" + net-margin line + CSV.
+- PHASE 6 Verification: test-mode end-to-end, then a small real AU booking (manual confirm), then refund fork + ledger.
+
+### Kingsman (AU) — carried forward
+user_id 116fd343-a034-4153-ac33-34bf1fcd7153. Live/matchable (approved + live checks pass, AUD, 300km Adelaide). Matches/bids/wins and customer CHARGE works, but NO automated payout until Phases 1–4 ship — settle manually (Dashboard OutboundPayment). stripe_account_id NULL (old Spanish acct deleted); under the new model AU needs a RECIPIENT object not a Connect account, so Phase 1 is the reconnect path. Fleet is_active=false — reactivate when going live for AU.
+
+### Blocked vs ready
+- READY NOW: Phases 1–2 + Phase 5 card-fee (no external dependency). Do the two dashboard tasks + ...cs5n check first.
+- NO EXTERNAL BLOCKER REMAINS (only the two dashboard toggles Nick controls).
+- CONFIRM before finalising Phase 2/3 economics: the FX crux question above (~1% vs ~3%). Not a build blocker.
+- Batching shape = economics call, pick during Phase 3.
+
