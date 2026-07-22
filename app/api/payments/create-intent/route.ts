@@ -93,25 +93,32 @@ export async function POST(req: Request) {
     const minCommissionEur  = platform?.minimum_commission_amount ?? 10;
     const minCommission     = Math.round(minCommissionEur * (MIN_FLOOR_RATE[currency] ?? 1) * 100) / 100;
 
-    const { commissionAmount, partnerPayoutAmount } = calculateCommission(
+    // Commission is computed and snapshotted here for the monthly payout/invoice
+    // math, but is NOT taken as a Stripe application fee — under the platform-hold
+    // model the whole charge lands on Camel's balance and commission is simply what
+    // remains after the monthly partner payout. Final partner net (which depends on
+    // fuel used) is computed at completion, not here.
+    const { commissionAmount } = calculateCommission(
       carHirePrice,
       commissionRatePct,
       minCommission
     );
 
-    const totalCents      = Math.round(totalPrice * 100);
-    const commissionCents = Math.round(commissionAmount * 100);
+    const totalCents = Math.round(totalPrice * 100);
 
     const jobLabel    = request.job_number ? `#${request.job_number}` : bidId.slice(0, 8);
     const partnerName = partnerProfile.company_name || "Partner";
 
+    // ── Platform-hold charge ──────────────────────────────────────────────
+    // The charge settles to Camel's platform balance in the bid currency. NO
+    // destination charge, NO application fee: the partner is paid MONTHLY (net of
+    // fuel refunds + commission) via an explicit transfer / OutboundPayment, and
+    // Camel's commission stays on the platform balance. See STRIPE_REWRITE_DESIGN.md.
+    // Idempotency-keyed on the bid so a retry can never create a second charge.
     const paymentIntent = await stripe.paymentIntents.create({
       amount:   totalCents,
       currency: currency.toLowerCase(),
-      description: `Camel Global ${jobLabel} | ${partnerName} | Car hire ${fmtAmt(carHirePrice, currency)} + Fuel ${fmtAmt(fuelPrice, currency)} | Commission ${fmtAmt(commissionAmount, currency)} | Partner net ${fmtAmt(partnerPayoutAmount + fuelPrice, currency)}`,
-      on_behalf_of:           partnerProfile.stripe_account_id,
-      application_fee_amount: commissionCents,
-      transfer_data: { destination: partnerProfile.stripe_account_id },
+      description: `Camel Global ${jobLabel} | ${partnerName} | Car hire ${fmtAmt(carHirePrice, currency)} + Fuel deposit ${fmtAmt(fuelPrice, currency)} | Commission (retained) ${fmtAmt(commissionAmount, currency)}`,
       metadata: {
         job_number:        String(request.job_number || ""),
         partner_name:      partnerName,
@@ -120,10 +127,10 @@ export async function POST(req: Request) {
         total_charged:     fmtAmt(totalPrice, currency),
         camel_commission:  fmtAmt(commissionAmount, currency),
         commission_rate:   `${commissionRatePct}%`,
-        partner_net:       fmtAmt(partnerPayoutAmount + fuelPrice, currency),
         car_hire_price:    carHirePrice.toString(),
         fuel_price:        fuelPrice.toString(),
         commission_amount: commissionAmount.toString(),
+        charge_model:      "platform_hold",
         currency,
         bid_id:            bidId,
         request_id:        bid.request_id,
@@ -131,6 +138,8 @@ export async function POST(req: Request) {
         partner_user_id:   bid.partner_user_id,
       },
       capture_method: "automatic",
+    }, {
+      idempotencyKey: `charge_${bidId}`,
     });
 
     return NextResponse.json({
