@@ -218,14 +218,12 @@ export async function POST(req: Request) {
     const liveAppMap = new Map<string, { email: string | null }>();
 
     if (eligibleIds.length > 0) {
-      const [appRes, driverRes] = await Promise.all([
-        db.from("partner_applications").select(`user_id, email, status`).in("user_id", eligibleIds),
-        db.from("partner_drivers").select(`partner_user_id`).eq("is_active", true).in("partner_user_id", eligibleIds),
-      ]);
-      if (appRes.error)    return NextResponse.json({ error: appRes.error.message }, { status: 400 });
-      if (driverRes.error) return NextResponse.json({ error: driverRes.error.message }, { status: 400 });
+      const appRes = await db
+        .from("partner_applications")
+        .select(`user_id, email, status`)
+        .in("user_id", eligibleIds);
+      if (appRes.error) return NextResponse.json({ error: appRes.error.message }, { status: 400 });
 
-      const activeDriverSet = new Set((driverRes.data || []).map((d: any) => String(d.partner_user_id)));
       const hasText = (v: unknown) => String(v || "").trim().length > 0;
 
       for (const a of appRes.data || []) {
@@ -234,10 +232,12 @@ export async function POST(req: Request) {
         if (String(a.status || "").trim().toLowerCase() !== "approved") continue;
         const profile = partnerProfileMap.get(uid);
         if (!profile) continue;
-        // Full live-readiness (mirrors refreshPartnerLiveStatus): active driver,
-        // base_address, default_currency, vat_number. Active fleet-in-category,
-        // base_lat/base_lng and radius are already ensured by the loop above.
-        if (!activeDriverSet.has(uid))          continue;
+        // Live-readiness (mirrors portal computeLiveReadiness): base_address,
+        // default_currency, vat_number. Active fleet-in-category, base_lat/base_lng
+        // and radius are already ensured by the loop above. An active DRIVER is
+        // deliberately NOT required — it's a fulfilment-time requirement (the
+        // partner assigns a driver when they process a won booking), not a
+        // matching gate, so a partner missing only a driver still receives bids.
         if (!hasText(profile.base_address))     continue;
         if (!hasText(profile.default_currency)) continue;
         if (!hasText(profile.vat_number))       continue;
