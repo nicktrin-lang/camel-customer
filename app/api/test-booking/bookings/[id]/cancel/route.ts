@@ -69,7 +69,20 @@ export async function POST(
     const refundType: CancelRefundType = isWithin48hrs ? "fuel_only" : "full";
     const refundStatus = isWithin48hrs ? "partial" : "full";
 
-    // ── Mark booking cancelled ───────────────────────────────────────────────
+    // ── Issue the Stripe refund FIRST — only cancel once the money is on its way
+    // back. Abort without cancelling if the refund fails, so it can be retried
+    // (previously the booking was cancelled first and a failed refund left the
+    // customer told "refunded" when they were not, with no way to retry).
+    const refundResult = await cancelBookingRefund(bookingId, refundType);
+    if (!refundResult.ok) {
+      console.error("Customer cancel refund error:", refundResult.error);
+      return NextResponse.json(
+        { error: `Refund failed — booking NOT cancelled, please try again: ${refundResult.error}` },
+        { status: 502 }
+      );
+    }
+
+    // ── Refund succeeded — mark booking + request cancelled ──────────────────
     const { error: updateErr } = await db
       .from("partner_bookings")
       .update({
@@ -85,13 +98,7 @@ export async function POST(
 
     await db.from("customer_requests").update({ status: "cancelled" }).eq("id", booking.request_id);
 
-    // ── Issue Stripe refund ──────────────────────────────────────────────────
-    const refundResult = await cancelBookingRefund(bookingId, refundType);
-    if (!refundResult.ok) {
-      console.error("Customer cancel refund error:", refundResult.error);
-    }
-
-    const refundAmount = refundResult.ok && !("already_processed" in refundResult)
+    const refundAmount = !("already_processed" in refundResult)
       ? refundResult.refund_amount
       : isWithin48hrs
         ? Number(booking.fuel_price || 0)

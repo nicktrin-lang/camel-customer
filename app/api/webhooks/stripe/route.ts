@@ -219,9 +219,14 @@ export async function POST(req: NextRequest) {
         .eq("id", bidId)
         .maybeSingle();
 
-      const bidCarHire    = Number(bid?.car_hire_price || 0);
-      const bidFuel       = Number(bid?.fuel_price     || 0);
-      const bidTotalPrice = Number(bid?.total_price    || bidCarHire + bidFuel);
+      // Money figures come from the immutable charge snapshot (PI metadata), NOT
+      // the mutable bid: a partner can edit a bid while the request is still open,
+      // so trusting the live bid here would let the booking / receipt / reports
+      // diverge from what Stripe actually charged. Only NON-money fields (notes,
+      // vehicle category, mileage, deposit notes) are read from the bid.
+      const bidCarHire    = carHirePrice;
+      const bidFuel       = fuelPrice;
+      const bidTotalPrice = totalPrice;
       const notes         = bid?.notes || null;
       const vehicleCategory = bid?.vehicle_category_name || null;
 
@@ -244,56 +249,69 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true });
       }
 
-      await db.from("partner_bids").update({ status: "accepted" }).eq("id", bidId);
-      await db.from("partner_bids").update({ status: "unsuccessful" }).eq("request_id", requestId).neq("id", bidId);
-      await db.from("customer_requests").update({ status: "confirmed" }).eq("id", requestId);
-      await db.from("request_partner_matches").update({ match_status: "accepted" }).eq("request_id", requestId).eq("partner_user_id", partnerUserId);
-      await db.from("request_partner_matches").update({ match_status: "closed" }).eq("request_id", requestId).neq("partner_user_id", partnerUserId);
+      // Card fee Camel absorbs, read from the charge's balance transaction.
+      // Captured once here, stored on the ledger AND used in the admin email below.
+      const feeData = await getStripeFeeData(chargeId);
 
+      // Idempotency: the booking is keyed on winning_bid_id (unique index). If it
+      // already exists, this is a duplicate / retried event — skip everything so we
+      // never double-insert a payment or re-send confirmation emails.
       const { data: existing } = await db
         .from("partner_bookings")
         .select("id")
         .eq("winning_bid_id", bidId)
         .maybeSingle();
 
-      let bookingId = existing?.id;
-
-      if (!bookingId) {
-        const { data: inserted, error: bookingErr } = await db
-          .from("partner_bookings")
-          .insert({
-            request_id:            requestId,
-            winning_bid_id:        bidId,
-            partner_user_id:       partnerUserId,
-            booking_status:        "confirmed",
-            currency,
-            charge_currency:       currency,
-            conversion_rate:       1,
-            amount:                bidTotalPrice,
-            car_hire_price:        bidCarHire,
-            fuel_price:            bidFuel,
-            commission_rate:       commissionRate,
-            commission_amount:     commissionAmt,
-            partner_payout_amount: partnerNet,
-            notes,
-            job_number:            jobNumber,
-            payout_status:         "held",
-            pref_transmission:     request?.pref_transmission ?? null,
-            pref_child_seats:      request?.pref_child_seats ?? null,
-          })
-          .select("id")
-          .single();
-
-        if (bookingErr) {
-          console.error("Booking insert error:", bookingErr);
-          return NextResponse.json({ error: bookingErr.message }, { status: 500 });
-        }
-        bookingId = inserted.id;
+      if (existing?.id) {
+        console.log(`payment_intent.succeeded: booking already exists for bid ${bidId} — duplicate event, skipping`);
+        return NextResponse.json({ received: true });
       }
 
-      const feeData = await getStripeFeeData(chargeId);
+      // ── Write booking + payment FIRST, then flip request/bid/match statuses ──
+      // Ordering is deliberate: if these inserts fail we return 500 so Stripe
+      // retries, and because the request is still "open" the retry re-enters
+      // cleanly instead of being short-circuited by the status gate above. (This
+      // fixes the dropped-booking bug: previously the request was flipped to
+      // "confirmed" before the insert, so a failed insert could never be retried.)
+      // Money fields are the charge snapshot; payout_status starts at "held" —
+      // the partner is paid monthly once the booking completes.
+      const { data: inserted, error: bookingErr } = await db
+        .from("partner_bookings")
+        .insert({
+          request_id:            requestId,
+          winning_bid_id:        bidId,
+          partner_user_id:       partnerUserId,
+          booking_status:        "confirmed",
+          currency,
+          charge_currency:       currency,
+          conversion_rate:       1,
+          charge_model:          m.charge_model || "platform_hold",
+          amount:                totalPrice,
+          car_hire_price:        carHirePrice,
+          fuel_price:            fuelPrice,
+          commission_rate:       commissionRate,
+          commission_amount:     commissionAmt,
+          partner_payout_amount: partnerNet, // provisional; canonical settled_partner_net is written at completion
+          stripe_fee_total:      feeData.stripe_fee ?? 0,
+          stripe_fee_breakdown:  feeData.stripe_fee != null
+            ? { card: { amount: feeData.stripe_fee, currency: feeData.stripe_fee_currency } }
+            : null,
+          notes,
+          job_number:            jobNumber,
+          payout_status:         "held",
+          pref_transmission:     request?.pref_transmission ?? null,
+          pref_child_seats:      request?.pref_child_seats ?? null,
+        })
+        .select("id")
+        .single();
 
-      await db.from("payments").insert({
+      if (bookingErr) {
+        console.error("Booking insert error:", bookingErr);
+        return NextResponse.json({ error: bookingErr.message }, { status: 500 });
+      }
+      const bookingId = inserted.id;
+
+      const { error: paymentErr } = await db.from("payments").insert({
         booking_id:               bookingId,
         customer_id:              null,
         stripe_payment_intent_id: pi.id,
@@ -311,6 +329,15 @@ export async function POST(req: NextRequest) {
         exchange_rate:            null,
       });
 
+      if (paymentErr) {
+        // The payment row failed after the booking was created. Delete the booking
+        // so Stripe's retry recreates BOTH cleanly — the idempotency guard keys on
+        // the booking, so leaving it would strand a booking with no payment row.
+        console.error("Payment insert error — rolling back booking:", paymentErr);
+        await db.from("partner_bookings").delete().eq("id", bookingId);
+        return NextResponse.json({ error: paymentErr.message }, { status: 500 });
+      }
+
       const { data: payment } = await db
         .from("payments")
         .select("id")
@@ -320,6 +347,13 @@ export async function POST(req: NextRequest) {
       if (payment?.id) {
         await db.from("partner_bookings").update({ payment_id: payment.id }).eq("id", bookingId);
       }
+
+      // Booking + payment committed — now flip the request / bid / match statuses.
+      await db.from("partner_bids").update({ status: "accepted" }).eq("id", bidId);
+      await db.from("partner_bids").update({ status: "unsuccessful" }).eq("request_id", requestId).neq("id", bidId);
+      await db.from("customer_requests").update({ status: "confirmed" }).eq("id", requestId);
+      await db.from("request_partner_matches").update({ match_status: "accepted" }).eq("request_id", requestId).eq("partner_user_id", partnerUserId);
+      await db.from("request_partner_matches").update({ match_status: "closed" }).eq("request_id", requestId).neq("partner_user_id", partnerUserId);
 
       await syncBookingStatuses(bookingId);
 
