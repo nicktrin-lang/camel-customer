@@ -73,11 +73,21 @@ export async function POST(req: Request) {
 
     const { data: partnerProfile } = await db
       .from("partner_profiles")
-      .select("stripe_account_id, stripe_onboarding_complete, commission_rate, company_name")
+      .select("stripe_account_id, stripe_onboarding_complete, stripe_recipient_id, payout_rail, recipient_payouts_enabled, commission_rate, company_name")
       .eq("user_id", bid.partner_user_id)
       .maybeSingle();
 
-    if (!partnerProfile?.stripe_account_id || !partnerProfile?.stripe_onboarding_complete) {
+    // ── Payout readiness is RAIL-SPECIFIC ────────────────────────────────────
+    // Charging a partner we cannot pay strands the customer's money on the
+    // platform balance, so this gate must match the rail that will actually pay
+    // them. AU/NZ partners have NO stripe_account_id — they have a recipient —
+    // so the old Connect-only check rejected every AU/NZ bid at checkout.
+    const payoutRail = partnerProfile?.payout_rail || "connect";
+    const payoutReady = !!partnerProfile && (payoutRail === "global_payouts"
+      ? Boolean(partnerProfile.stripe_recipient_id && partnerProfile.recipient_payouts_enabled)
+      : Boolean(partnerProfile.stripe_account_id && partnerProfile.stripe_onboarding_complete));
+
+    if (!partnerProfile || !payoutReady) {
       return NextResponse.json({ error: "This partner has not set up payouts yet. Please choose another bid." }, { status: 400 });
     }
 
