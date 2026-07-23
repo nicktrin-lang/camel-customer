@@ -496,7 +496,7 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
       style: "currency", currency: cur,
     }).format(n);
 
-  const companyName = params.companyName || (locale === "es" ? "tu empresa de alquiler" : "your car hire partner");
+  const companyNameRaw = params.companyName || null;
 
   type RcptLocale = "en" | "es" | "fr" | "it" | "pt" | "de";
   const RC: Record<RcptLocale, Record<string, string>> = {
@@ -517,8 +517,12 @@ export async function sendBookingReceiptEmail(params: GenerateBookingReceiptPara
   };
   const rL: RcptLocale = (["en","es","fr","it","pt","de"] as string[]).includes(locale) ? (locale as RcptLocale) : "en";
   const r = RC[rL];
+  // Fallbacks localised across all 6 locales (not es-or-en) for the rare case where
+  // companyName / customerName is null.
+  const CO_FALLBACK: Record<RcptLocale, string> = { en: "your car hire partner", es: "tu empresa de alquiler", fr: "votre société de location", it: "il tuo autonoleggio", pt: "a sua empresa de aluguer", de: "Ihr Mietwagenpartner" };
+  const companyName = companyNameRaw || CO_FALLBACK[rL];
   const co = String(companyName);
-  const custNm = params.customerName || (rL === "en" ? "there" : "");
+  const custNm = params.customerName || r["cc_fallback_name"];
 
   const subject = r["rc_subject"].replace("{JOB}", jobNo);
 

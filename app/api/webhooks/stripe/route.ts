@@ -113,15 +113,19 @@ const SUPPORTED_LOCALES: Locale[] = ["en", "es", "fr", "it", "pt", "de"];
 function coerceLocale(v: unknown): Locale {
   return (SUPPORTED_LOCALES as string[]).includes(String(v)) ? (v as Locale) : "en";
 }
-async function getCustomerLocale(customerEmail: string): Promise<Locale> {
+// Look up the customer's communication_locale DIRECTLY by user_id. The previous
+// implementation used db.auth.admin.listUsers() + email match, which (a) only
+// returns the first page (~50 users) so any customer past page 1 silently fell
+// back to English, and (b) violates the rule "never use listUsers() to find
+// customers — look up customer_profiles by user_id". customer_user_id is on the
+// request row (added to the .select() below).
+async function getCustomerLocale(customerUserId: string | null): Promise<Locale> {
+  if (!customerUserId) return "en";
   try {
-    const { data: usersData } = await db.auth.admin.listUsers();
-    const matchedUser = usersData?.users?.find(u => (u.email || "").toLowerCase() === customerEmail.toLowerCase());
-    if (!matchedUser) return "en";
     const { data } = await db
       .from("customer_profiles")
       .select("communication_locale")
-      .eq("user_id", matchedUser.id)
+      .eq("user_id", customerUserId)
       .maybeSingle();
     return coerceLocale(data?.communication_locale);
   } catch {
@@ -233,7 +237,7 @@ export async function POST(req: NextRequest) {
       const { data: request } = await db
         .from("customer_requests")
         .select(`
-          status, customer_name, customer_email,
+          status, customer_name, customer_email, customer_user_id,
           pickup_address, dropoff_address, pickup_at, dropoff_at,
           journey_duration_minutes,
           vehicle_category_name,
@@ -393,7 +397,7 @@ export async function POST(req: NextRequest) {
 
       // Look up locales for customer and partner
       const [customerLocale, partnerLocale] = await Promise.all([
-        request?.customer_email ? getCustomerLocale(request.customer_email) : Promise.resolve<Locale>("en"),
+        getCustomerLocale(request?.customer_user_id ?? null),
         getPartnerLocale(partnerUserId),
       ]);
 
