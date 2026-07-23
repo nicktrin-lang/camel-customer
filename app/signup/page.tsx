@@ -16,7 +16,7 @@ function SignupForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const nextPath     = searchParams.get("next") || "/bookings";
-  const { t }        = useTranslation();
+  const { t, locale } = useTranslation();
 
   const [fullName,     setFullName]     = useState("");
   const [phone,        setPhone]        = useState("");
@@ -53,7 +53,9 @@ function SignupForm() {
 
       const profileRes = await fetch("/api/test-booking/customer-profile", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, full_name: fullName.trim() || null, phone: phone.trim() || null }),
+        // Default email language from the language used at signup (customers
+        // have no country; UI language is the best "at account creation" signal).
+        body: JSON.stringify({ user_id: userId, full_name: fullName.trim() || null, phone: phone.trim() || null, communication_locale: locale }),
       });
       if (!profileRes.ok) {
         const j = await profileRes.json().catch(() => null);

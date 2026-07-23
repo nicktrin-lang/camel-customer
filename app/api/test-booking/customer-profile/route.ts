@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
+import { coerceLocale } from "@/lib/email";
 
 function getBearerToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
     const upsertData: Record<string, unknown> = { user_id };
     if (full_name             !== undefined) upsertData.full_name             = full_name ?? null;
     if (phone                 !== undefined) upsertData.phone                 = phone ?? null;
-    if (communication_locale  !== undefined) upsertData.communication_locale  = communication_locale;
+    if (communication_locale  !== undefined) upsertData.communication_locale  = coerceLocale(communication_locale);
     if (billing_address       !== undefined) upsertData.billing_address       = billing_address ?? null;
     if (tax_id                !== undefined) upsertData.tax_id                = tax_id ?? null;
 

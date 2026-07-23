@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
+import { useTranslation } from "@/lib/i18n/useTranslation";
 import HCaptcha from "@/app/components/HCaptcha";
 
 export default function TestBookingSignupPage() {
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
   const router   = useRouter();
+  const { locale } = useTranslation();
 
   const [fullName, setFullName] = useState("");
   const [phone,    setPhone]    = useState("");
@@ -64,6 +66,8 @@ export default function TestBookingSignupPage() {
           user_id:   userId,
           full_name: fullName.trim() || null,
           phone:     phone.trim() || null,
+          // Default email language from the signup UI language (no country for customers).
+          communication_locale: locale,
         }),
       });
       if (!profileRes.ok) {
