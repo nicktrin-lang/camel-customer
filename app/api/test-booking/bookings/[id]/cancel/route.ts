@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase/server";
 import { createCustomerServiceRoleSupabaseClient } from "@/lib/supabase-customer/server";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, coerceLocale, sendCustomerCancellationEmail, sendPartnerBookingCancelledByCustomerEmail, Locale } from "@/lib/email";
 import { cancelBookingRefund, CancelRefundType } from "@/lib/portal/cancelBooking";
 
 function getBearerToken(req: Request) {
@@ -107,12 +107,24 @@ export async function POST(
     // ── Emails ───────────────────────────────────────────────────────────────
     const { data: partnerProfile } = await db
       .from("partner_profiles")
-      .select("company_name")
+      .select("company_name, communication_locale")
       .eq("user_id", booking.partner_user_id)
       .maybeSingle();
 
     const { data: partnerAuthData } = await db.auth.admin.getUserById(booking.partner_user_id);
     const partnerEmail = partnerAuthData?.user?.email || null;
+
+    // Recipient locales (default en)
+    const partnerLocale = coerceLocale(partnerProfile?.communication_locale);
+    let customerLocale: Locale = "en";
+    if (request.customer_user_id) {
+      const { data: custProfile } = await db
+        .from("customer_profiles")
+        .select("communication_locale")
+        .eq("user_id", request.customer_user_id)
+        .maybeSingle();
+      customerLocale = coerceLocale(custProfile?.communication_locale);
+    }
 
     const jobNo       = booking.job_number ? `#${booking.job_number}` : "";
     const companyName = partnerProfile?.company_name || "the car hire company";
@@ -124,61 +136,32 @@ export async function POST(
     const fmt         = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: curr }).format(n);
     const carHire     = Number(booking.car_hire_price || 0);
 
-    const refundNote = isWithin48hrs
-      ? `As this cancellation is within 48 hours of your pickup time, the car hire fee of ${fmt(carHire)} is non-refundable. Your fuel deposit of ${fmt(refundAmount)} will be refunded in full.`
-      : `As this cancellation is more than 48 hours before your pickup time, a full refund of ${fmt(refundAmount)} will be processed.`;
-
     const customerEmail = request.customer_email || user.email;
     if (customerEmail) {
-      await sendEmail({
-        to: customerEmail,
-        subject: `Your Camel Global booking ${jobNo} has been cancelled`,
-        html: `
-          <div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
-            <div style="background:#000;padding:20px 28px;">
-              <h2 style="color:#fff;margin:0;">Booking Cancelled</h2>
-              <p style="color:#999;margin:4px 0 0;font-size:13px;">Booking ${jobNo}</p>
-            </div>
-            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;">
-              <p>Hi ${request.customer_name || "there"},</p>
-              <p>Your booking ${jobNo} with ${companyName} has been cancelled.</p>
-              ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
-              <p><strong>Pickup was:</strong> ${pickupTime}<br/><strong>Location:</strong> ${request.pickup_address || "—"}</p>
-              <div style="background:${isWithin48hrs ? "#fff8f4" : "#f0fff4"};border:1px solid ${isWithin48hrs ? "#ff7a00" : "#22c55e"};padding:16px;margin:16px 0;">
-                <p style="margin:0;font-weight:700;">${isWithin48hrs ? "⚠ Partial Refund" : "✅ Full Refund"}</p>
-                <p style="margin:8px 0 0;font-size:14px;">${refundNote}</p>
-                <p style="margin:8px 0 0;font-weight:700;">Refund total: ${fmt(refundAmount)}</p>
-                <p style="margin:4px 0 0;font-size:13px;color:#666;">Please allow 5–10 business days for the refund to appear on your statement.</p>
-              </div>
-              <p>Questions? Email <a href="mailto:contact@camel-global.com" style="color:#ff7a00;">contact@camel-global.com</a></p>
-              <a href="${siteUrl}/bookings" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;margin-top:8px;">View My Bookings</a>
-              <p style="margin-top:24px;color:#999;font-size:13px;">The Camel Global Team</p>
-            </div>
-          </div>
-        `,
+      await sendCustomerCancellationEmail(customerEmail, {
+        locale: customerLocale,
+        jobNo,
+        customerName: request.customer_name,
+        companyName,
+        reason,
+        pickupTime,
+        pickupAddress: request.pickup_address,
+        isWithin48: isWithin48hrs,
+        refundAmountText: fmt(refundAmount),
+        carHireText: fmt(carHire),
+        siteUrl,
       }).catch(() => {});
     }
 
     if (partnerEmail) {
-      await sendEmail({
-        to: partnerEmail,
-        subject: `Booking ${jobNo} cancelled by customer`,
-        html: `
-          <div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
-            <div style="background:#000;padding:20px 28px;"><h2 style="color:#fff;margin:0;">Booking Cancelled by Customer</h2></div>
-            <div style="padding:24px 28px;background:#fff;border:1px solid #eee;">
-              <p>Booking ${jobNo} has been cancelled by the customer.</p>
-              <p>
-                <strong>Customer:</strong> ${request.customer_name || "—"}<br/>
-                <strong>Pickup was:</strong> ${pickupTime}<br/>
-                <strong>Refund:</strong> ${refundStatus === "full" ? "Full refund" : "Partial refund (fuel deposit only — within 48hrs)"} — ${fmt(refundAmount)}
-              </p>
-              ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ""}
-              <p>No action required from you.</p>
-              <p style="color:#999;font-size:13px;">The Camel Global Team</p>
-            </div>
-          </div>
-        `,
+      await sendPartnerBookingCancelledByCustomerEmail(partnerEmail, {
+        locale: partnerLocale,
+        jobNo,
+        customerName: request.customer_name,
+        reason,
+        pickupTime,
+        isWithin48: isWithin48hrs,
+        refundAmountText: fmt(refundAmount),
       }).catch(() => {});
     }
 
