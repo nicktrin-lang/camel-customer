@@ -1,45 +1,157 @@
 Camel Global — Project Handover Document
-Always paste this document at the start of every new conversation.
 
-Update it at the end of each session before the chat fills up.
+This file is read directly by Claude Code from disk — you do NOT need to paste it.
+At the start of a session, Claude reads `CLAUDE.md` in each repo (auto-loaded) plus the
+"LATEST SESSION" section below. Update this file at the end of each session.
+
 Working Rules
-Always paste the current file before Claude rewrites it. Claude works from what you paste, not from memory.
+- Claude Code reads and edits files directly on disk (Read / Edit / Write). It does not
+  work from pasted text or artifacts, so the old "paste the file / paste the file tree /
+  write full files only / use sed / copy artifacts to disk" instructions no longer apply.
+- Read the actual file before editing it — never trust a comment or this document as current.
+- `npx tsc --noEmit` after every change. Commit per logical unit; deploy + verify per unit.
+- Always git pull both repos before starting — a collaborator may have pushed.
+- `main` requires a PR (pushes have used admin bypass). Confirm before pushing to production.
+- When restyling, never touch API params or business logic — visual classes only.
+- ChatWidget.tsx is NOT identical in both repos (portal = partner-focused welcome, customer =
+  booking-focused). Footer.tsx also differs (portal has Portal/Driver/CustomerFooter, customer
+  has CustomerFooter only). Update each separately.
+- zsh globs `[id]` paths — single-quote dynamic route paths: 'app/partner/bookings/[id]/page.tsx'.
+- Portal `lib/email.ts` is large — never replace it with a partial file. Restore if clobbered:
+  `git show <commit>:lib/email.ts > lib/email.ts`.
+- camel-coming-soon is a submodule and always shows modified — ignore it, never `git add` it;
+  always `git add <specific-file>`, never `git add .`.
+═══════════════════════════════════════════════════════════════════════════════
+LATEST SESSION — 2026-07-23  (read this first)
+═══════════════════════════════════════════════════════════════════════════════
 
-Always give Claude the full file tree at the start of a new chat:
-Portal: find ~/camel-portal -not -path '/node_modules/' -not -path '/.git/' -not -path '/.next/' | sort
+## ✅ DONE & LIVE — Stripe payment system rewrite (platform-hold model)
 
-Customer: find ~/camel-customer -not -path '/node_modules/' -not -path '/.git/' -not -path '/.next/' | sort
-Before any rewrite, Claude will tell you which files to paste, or give you a command to cat them.
+Both repos merged to `main` and deployed to production:
+- Portal `main` = `3116b9c`  ·  Customer `main` = `e6dea37`
+- Rollback tag on both repos: **`v-pre-stripe-rewrite`** (revert target if ever needed)
 
-Always ask Claude to check the actual file before rewriting — never assume the artifact is current.
+**Model** (replaces destination charges):
+- Charge settles to Camel's **platform balance** — NO `transfer_data.destination`, NO
+  `on_behalf_of`, NO `application_fee`. Metadata `charge_model="platform_hold"`.
+- Partner paid **monthly** via explicit `stripe.transfers.create`, amount = stored
+  `settled_partner_net`, **one transfer per (partner, currency, settlement-month)**.
+- Commission stays on Camel's balance, per-currency. Camel bears all Stripe fees.
+- Fuel: customer refunded unused fuel at **completion**; partner credited fuel used.
+- Cancellation: **>48h = full refund** (booking `cancelled`); **<48h = fuel deposit
+  refunded, partner keeps car hire** (booking `ready`, `settled_partner_net = car_hire − commission`).
+- `settled_partner_net = car_hire − commission + fuel_used`, written at completion / <48h cancel.
 
-Always provide the git push command at the end of every change.
+**Validated end-to-end on the Stripe SANDBOX (real test money moved), all reconcile to the cent:**
+P1 charge · P2 completion + €25 fuel refund (net €105) · P3 full refund (€150) + fuel-only
+refund (€50, net €80) · P4 monthly payout (€105 transfer, invoice + statement, both tables `paid`).
 
-Claude must always write full files — no partial diffs, no "change X to Y" instructions.
+**Bugs found & fixed this session:**
+1. Completion failure was swallowed by `app/api/partner/bookings/[id]/update/route.ts` — now
+   surfaces `settlement_error` + admin alert (money-critical, never silent).
+2. Stripe connect threw on localized country names ("España") — added `COUNTRY_ALIASES` in
+   `app/api/partner/stripe/connect/route.ts`.
+3. Payout idempotency **poison**: key was `payout_<partner>_<period>_<ccy>`; a failed run
+   cached the error for 24h and blocked retries. Now includes a sha1 of the booking-set.
+4. `payout_batch_id` is a **uuid** column; cron wrote the Stripe `tr_...` string into it →
+   22P02 → swallowed → split-brain (money sent, booking stuck `ready`). Added **`payout_transfer_id text`**
+   column (bookings + payments); post-transfer DB failure now alerts admin, never swallowed.
+5. End-of-month cutoff: payout/invoice/statement now tied to each booking's **`settled_at`
+   month**, not the run date; current-open-month settlements defer to next run.
 
-When rebranding/restyling, never touch API call parameters or business logic — visual classes only.
+**DB migration already applied to prod (shared Supabase project):**
+`ALTER TABLE partner_bookings ADD COLUMN payout_transfer_id text;` + same on `payments`.
+(STRIPE_REWRITE_SCHEMA.sql already run in an earlier session.)
 
-ChatWidget.tsx is NOT identical in both repos — portal has partner-focused welcome message, customer has booking-focused welcome message. Update separately.
+**Cleanup still pending (non-urgent):**
+- Synthetic P3 test rows: `DELETE FROM payments WHERE booking_id IN ('11111111-1111-4111-8111-111111111111','33333333-3333-4333-8333-333333333333'); DELETE FROM partner_bookings WHERE job_number IN (1000180,1000181);`
+- `ff60076` (outreach forwarded-email heuristic) shipped to prod with the portal merge — intentional, just noted.
 
-Footer.tsx exists in both repos but they are different — portal has PortalFooter/DriverFooter/CustomerFooter, customer has CustomerFooter only. Update separately.
+**Deferred (separate builds, NOT blocking in-corridor EUR/GBP/USD/CAD launch):**
+- **P5 AU/NZ Global Payouts** — Kingsman (AUD) is out-of-corridor. Needs v2 recipient objects +
+  charge to platform balance + explicit OutboundPayment. Cron already branches on
+  `payout_rail === "global_payouts"` and leaves those bookings `ready` (unpaid) for now.
+- Optional: add `payout_transfer_id` to admin/partner CSV exports for reconciliation.
 
-Always git pull before starting any session — collaborator may have pushed.
+## ✅ DONE & LIVE — Full email LANGUAGE audit (partner + customer)  [2026-07-23]
 
-zsh square bracket paths — always quote dynamic route paths in git commands: 'app/partner/bookings/[id]/page.tsx'
+MERGED to `main` and deployed to prod in both repos (portal PR #1, customer PR #1).
+Follow-ups (branch `claude/email-followups-9bc42f`): customer signup now defaults
+`communication_locale` from the signup UI language (customers have no country), and contact-form
+auto-replies are now localized to the sender's site language (partner + customer). Admin contact
+auto-reply stays English (internal).
 
-JSON i18n files — when adding new keys, always copy the full artifact content to disk. Never assume the artifact was saved automatically.
+**Root causes fixed:**
+1. `partner/complete-signup/route.ts` — replaced es/en-only `deriveLocale` with shared
+   `countryToEmailLocale()` (lib/email.ts: DE→de, FR→fr, IT→it, PT→pt, ES→es, else en) AND now
+   **persists** it to `partner_profiles.communication_locale` (previously never written → every
+   partner started null→en).
+2. `partner/bookings/[id]/invoice-data/route.ts` — the `=== "es" ? "es" : "en"` fed the
+   **PDF** (no email in this route); per the PDF-stays-English rule it now forces `locale="en"`.
+3. Denia "German" traced: `getPartnerLocale` was correct; the `de` was stored on a Spain test
+   partner ("Test Cars") set manually via settings. Data corrected by backfill.
+4. **Backfill applied to prod (partners only):** 9 rows — 8 Spanish partners en→es, Test Cars
+   de→es; AU/null-country partners correctly stayed en. `customer_profiles` has **no country
+   column** so customers were left as-is (per decision).
 
-Portal email.ts is large — never replace it with a partial file. Always restore from git if accidentally overwritten: git show <commit>:lib/email.ts > lib/email.ts
+**Localized (6 locales, all verified to differ from EN — 158 maps auto-checked):** booking
+cancellation emails (admin/partner/customer routes, both repos), payout notification +
+commission-invoice + monthly-statement **covering emails** (attached PDFs stay English),
+partner suggestion-confirmation, partner + customer chat-transcript, partner + customer
+password-reset (best-effort via generateLink's matched user). Already-correct senders
+(make-live, update-status, resend-approval, bids, review/onboarding reminders, completeBooking,
+post-refund, resend-statement, webhook receipt/confirm/partner) confirmed OK.
 
-Always tell Claude which sed commands failed — sed on disk is the only reliable way to make small changes to deployed files.
+**Deliberate exceptions (documented):** contact-form auto-replies stay English (anonymous
+submitters have no communication_locale and the form sends no locale); `partner/application-received`
+alt route is unused (no callers — real signup email is localized in complete-signup).
+All PDFs / commission invoice / monthly statement bodies stay English; `[Admin]` emails stay English.
 
-When making changes with sed, always verify with grep afterwards before committing.
+---
 
-Always label artifacts with the destination file path so the user knows where to copy them.
+## ⏭️ (superseded) NEXT TASK — Full email LANGUAGE audit (partner + customer)
 
-multiline sed never works in zsh — always use separate sed commands per line, or write a full file artifact.
+**Symptoms observed:** Spanish partner (Denia Cars) — the application-received email was
+Spanish (correct), but the "account is live" email arrived in **English** (should be Spanish).
+A resent test booking produced a "new booking" email in **German** for a Spain-based partner.
 
-Python3 heredoc is the reliable way to make multiline replacements — use python3 << 'EOF' pattern.
+**Requirement:** every transactional email to a partner or customer must be in the recipient's
+language = their `communication_locale`, which **defaults to the language of their country** at
+account creation and is **user-overridable** in account settings. All **6** locales (en, es, fr,
+it, pt, de) must actually translate. **EXCEPT** the commission invoice, monthly statement, and
+**every attached PDF** (receipt, completion statement, invoice-data, terms, operating rules) —
+those stay **English** (NTUK legal). Internal `[Admin]` emails stay English.
+
+**Root causes already identified (start here):**
+1. **Country→locale default is es-or-en ONLY** — `app/api/partner/complete-signup/route.ts:42`:
+   `c === "spain" || c === "españa" || c === "es" ? "es" : "en"` — a German/French/Italian/
+   Portuguese partner never gets their language. Need a full COUNTRY→locale map (DE→de, FR→fr,
+   IT→it, PT→pt, ES→es, else en) applied as the default `communication_locale` at creation.
+2. **es-collapse ternary** (the exact CLAUDE.md-forbidden pattern) in a transactional email:
+   `app/api/partner/bookings/[id]/invoice-data/route.ts:45` `communication_locale === "es" ? "es" : "en"`
+   collapses de/fr/it/pt → English for the invoice-data *email*.
+3. `communication_locale` may be **null/unset** for some accounts → `coerceEmailLocale` → 'en'.
+4. **Inconsistent locale sourcing** across senders — some read `communication_locale`, some the
+   application/browser locale, some hardcode. The German booking email comes from the customer
+   webhook's `getPartnerLocale()` (`camel-customer/app/api/webhooks/stripe/route.ts`) — trace why
+   it returned `de` for Denia.
+
+**Audit scope — check EVERY email sender in both repos:**
+- Portal senders: `app/api/admin/applications/{make-live,resend-approval,update-status}`,
+  `app/api/admin/bookings/[id]/{cancel,post-refund,resend-statement}`,
+  `app/api/partner/{bids,complete-signup,suggestions}`, `app/api/partner/bookings/[id]/{cancel,invoice-data,update}`,
+  `app/api/cron/{onboarding-reminder,review-reminder}`, `app/cron/monthly-payout`,
+  `lib/portal/completeBooking.tsx`, `lib/email.ts`.
+- Customer senders: `app/api/test-booking/bookings/[id]/cancel`, `app/api/test-booking/requests`,
+  `app/api/test-booking/customer-profile`, `app/api/webhooks/stripe`, `lib/email.ts`,
+  `lib/portal/generateBookingReceiptPDF.tsx` (PDF must stay English — check the `locale === "es"`
+  companyName fallback at line ~499).
+- For each: resolve locale from `communication_locale` (defaulted by country); assert all 6
+  languages actually DIFFER from the English source (a past bug left headings English while JSON
+  shape validated); confirm PDFs/invoice/statement stay English.
+
+═══════════════════════════════════════════════════════════════════════════════
+
 Project Overview
 Name: Camel Global
 
@@ -1583,3 +1695,114 @@ user_id 116fd343-a034-4153-ac33-34bf1fcd7153. Live/matchable (approved + live ch
 - CONFIRM before finalising Phase 2/3 economics: the FX crux question above (~1% vs ~3%). Not a build blocker.
 - Batching shape = economics call, pick during Phase 3.
 
+
+---
+
+## Chat 60 — Stripe rewrite SHIPPED to production; docs corrected; AU/NZ P5 fixed but UNVERIFIED [Jul 22–24 2026]
+
+**SUPERSEDES the Chat 59 status line "nothing built yet".** The rewrite is built, merged and live
+in BOTH repos. Chat 59's *fee research and AU/NZ answers* remain valid; its *build plan* has been
+overtaken by `STRIPE_REWRITE_DESIGN.md`, which is now the authoritative money architecture.
+
+### How this session went wrong first (read this)
+Work happened across several surfaces — CLI, desktop app, phone. Separate sessions **share the
+repo, not each other's context.** A full charge-model rewrite shipped from desktop sessions while
+`CLAUDE.md` still described the old destination-charge model as "the existing path, do not touch
+it" — and `CLAUDE.md` was **untracked in both repos**, so it existed on one Mac only and travelled
+nowhere. A later session oriented itself from that stale file and had to rediscover the rewrite
+from git. Both problems are fixed below. **The rule: end a session with work committed and
+CLAUDE.md / this handover true, or the next session starts from a lie.**
+
+### 1. Money-flow audit → rewrite (Jul 22–23)
+`STRIPE_MONEY_FLOW_AUDIT.md` — 20 findings, 4 critical, from four parallel read-only audits. Root
+cause: the charge was a **destination charge**, so money reached the partner the instant the charge
+succeeded, while several downstream paths were written as if funds still sat on the platform.
+Worst: the monthly cron issued a *second* transfer (double-pay or false-fail); the webhook dropped
+bookings on a transient insert error (card charged, no booking); completion refund/reversal
+double-fired on retry; a completed-then-cancelled booking still got paid.
+
+`STRIPE_REWRITE_DESIGN.md` replaced the model outright. Precondition was **zero live bookings** —
+a clean-slate rewrite, no data migration.
+
+### 2. The model now live on `main` (verified against source, not assumed)
+- **Charge** — plain PaymentIntent for `car_hire + fuel_deposit` to **Camel's platform balance**,
+  bid currency, `charge_model='platform_hold'`, idempotency `charge_${bid_id}`. **No
+  `transfer_data`, no `on_behalf_of`, no `application_fee`.** There is **no corridor fork** in
+  `create-intent` — every rail charges identically. Camel is **merchant of record**, so refund and
+  chargeback liability sits with Camel by choice.
+- **Webhook** — inserts `partner_bookings` **and** `payments` FIRST (compensating delete if the
+  payments insert fails), `payout_status='held'`, captures the card fee into `stripe_fee_total` /
+  `stripe_fee_breakdown`, and only THEN sets `customer_requests.status='confirmed'`. Amounts come
+  from the PaymentIntent metadata snapshot, never a re-read of the still-editable bid.
+- **Completion** — customer fuel refund from the platform balance. **No transfer reversal — nothing
+  was ever transferred.** Stamps `settled_partner_net` (`car_hire − commission + fuel_used`) and
+  `settled_at`, sets `ready`. Idempotency `fuelrefund_${booking_id}`; re-entry guarded on
+  `payout_status`.
+- **Cancellation** — >48h: full refund, `payout_status='cancelled'`. <48h: fuel deposit only,
+  partner keeps car hire, `ready` with `settled_partner_net = car_hire − commission`. Written to
+  **BOTH** `partner_bookings` and `payments` — writing only `payments` is what previously let the
+  cron pay a cancelled booking. Idempotency `cancelrefund_${booking_id}`.
+- **Monthly cron** — pays `payout_status='ready' AND payout_hold=false` from **stored**
+  `settled_partner_net`, grouped per (partner, currency, settlement-month), one idempotency-keyed
+  `transfers.create` each, then emits the commission invoice + monthly statement PDF. Bookings that
+  settled in the current still-open month are **deferred** to next month's run.
+- **State machine** — `held` → `ready` → `paid`, plus `cancelled`; orthogonal `payout_hold`.
+  The design's **`paying` claim state is NOT implemented** — do not assume it exists.
+- **Commission** — computed once in `calculateCommission.ts`, snapshotted to
+  `partner_bookings.commission_amount`, and **read** by payout, invoice, statement and every
+  report. The three divergent recomputations are gone; do not reintroduce one.
+- **Fees** — Camel absorbs all of them. Card fee at the webhook, AU/NZ payout fee at payout, both
+  onto `stripe_fee_total` / `stripe_fee_breakdown`. Never sum fees across currencies.
+
+### 3. Production state — VERIFIED Jul 24
+- Customer production = `3d40356`; portal production = `45aba26` (both confirmed on the Vercel
+  Production badge). Two portal *preview* deploys sit above it — the AU/NZ branch, not production.
+  Vercel crons only run on production, so the AU/NZ branch cannot fire the payout cron.
+- **DB: 2 bookings total, both `completed` and already `paid`, both EUR. Nothing is `ready`, so the
+  Aug 1 run is a no-op.** The "zero live bookings" precondition effectively still holds.
+- `STRIPE_REWRITE_SCHEMA.sql` **has been run** — every column it declares exists, plus
+  `partner_recovery_ledger`. Verified by probing the live schema, not by asking.
+- **One real gap: `payments.outbound_payment_id` does not exist** — the SQL declares
+  `outbound_payment_id` on `partner_bookings` only. The P5 code was writing it to `payments`; that
+  write has been removed rather than the column added, since `partner_bookings` is canonical
+  (design §7).
+
+### 4. AU/NZ Global Payouts (P5) — branch `claude/onboarding-country-aunz-9bc42f`
+Deliberately deferred in the design, then partly built anyway and left mid-edit. Now repaired and
+committed (`5eecf7b`, `b9ad0d0`):
+- Wrapping the in-corridor path in `else { … }` block-scoped `transferId` away from the shared
+  invoice/statement emails — it **did not typecheck**. Fixed with a rail-agnostic `payoutRef`.
+- A recipient with no local bank payout method fell through and created the quote **and** the
+  OutboundPayment with the payout method omitted, letting Stripe pick a destination we never
+  verified. Now throws.
+- Removed the write to the non-existent `payments.outbound_payment_id`, which ran *after* the
+  OutboundPayment — so it failed once money had already moved.
+
+**It compiles and is coherent. It is NOT verified.** The v2 Money Management response shapes
+(`financial_accounts`, `payout_methods`, quote `fees`) are written from the docs and have never
+been exercised against a live or test call. **Must go through test-mode end-to-end before it
+touches real money.** `main` still skips the `global_payouts` rail and leaves those bookings
+`ready`, so AU/NZ payouts remain manual and nothing breaks meanwhile.
+
+### 5. Docs corrected and TRACKED (branch `claude/docs-money-model`, both repos)
+`CLAUDE.md` is now in git in both repos for the first time, rewritten against the source:
+platform-hold model, state machine, cancellation split, the four idempotency keys, commission
+computed-once-then-read, fees absorbed, and corrected architecture-map rows (completeBooking no
+longer reverses transfers; added `cancelBooking`, `stripeGlobalPayouts`,
+`generateMonthlyStatementPDF`). Also corrected: **live readiness is 7 checks in
+`computeLiveReadiness.ts`**, not 8 in `refreshPartnerLiveStatus.ts`. Portal additionally tracks
+`STRIPE_REWRITE_DESIGN.md`, `STRIPE_MONEY_FLOW_AUDIT.md`, `STRIPE_REWRITE_SCHEMA.sql` and
+`OUTREACH_ANALYTICS_SCHEMA.sql` — all previously untracked and machine-local.
+
+### 6. Outstanding
+- **Two PRs to merge** — `claude/docs-money-model` → `main` in both repos. Until they land, `main`
+  still carries no `CLAUDE.md` and a fresh clone gets no ground truth.
+- **P5 test-mode verification** before any live AU/NZ money, plus the two dashboard tasks (enable
+  Local network payout method; recurring daily transfers) and confirming `STRIPE_SECRET_KEY`
+  resolves to the `…cs5n` account.
+- **Design P6** (reporting reconciliation) was in progress — read canonical stored values, add
+  fees-absorbed + net margin, per-currency reconciliation view.
+- Carried from the audit, not folded into the rewrite: **no `charge.dispute.created` handler** yet
+  (auto-`payout_hold` on dispute is design P6).
+- The FX crux — whether an AUD charge settles as AUD on a multi-currency balance so payouts skip
+  the ~2% FX leg — still unconfirmed. Decides ~1% vs ~3% on AU/NZ payouts. Not a build blocker.
