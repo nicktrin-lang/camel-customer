@@ -109,6 +109,174 @@ function brandEmail(
 }
 
 // ---------------------------------------------------------------------------
+// Booking cancellation emails (customer-initiated) — localized. Company name,
+// money amounts and the 48hr rule outcome are values, not translated copy.
+// ---------------------------------------------------------------------------
+
+function wrapBrand(heading: string, body: string, locale: Locale): string {
+  const sig = SIG[locale] ?? SIG.en;
+  return `
+    <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; color:#222; line-height:1.6; max-width:600px;">
+      <div style="background:#000; padding:24px 32px;">
+        <h2 style="color:#fff; margin:0;">${heading}</h2>
+      </div>
+      <div style="background:#f8f8f8; padding:24px 32px; border:1px solid #e5e5e5;">
+        ${body}
+        <p style="margin-top:32px; color:#888; font-size:14px;">${sig.regards}<br/><strong style="color:#222;">${sig.team}</strong></p>
+      </div>
+    </div>`;
+}
+
+export async function sendCustomerCancellationEmail(to: string, opts: {
+  locale?: Locale;
+  jobNo: string;
+  customerName?: string | null;
+  companyName: string;           // proper noun, not translated
+  reason?: string | null;
+  pickupTime?: string | null;
+  pickupAddress?: string | null;
+  isWithin48: boolean;
+  refundAmountText: string;
+  carHireText: string;
+  siteUrl: string;
+}) {
+  const locale = opts.locale ?? "en";
+  const t = <T,>(m: Record<Locale, T>) => m[locale] ?? m.en;
+  const JOB = opts.jobNo;
+  const generic: Record<Locale, string> = { en: "there", es: "cliente", fr: "client", it: "cliente", pt: "cliente", de: "Kunde" };
+  const name = (opts.customerName && opts.customerName.trim()) || t(generic);
+
+  const subject: Record<Locale, string> = {
+    en: `Your Camel Global booking ${JOB} has been cancelled`,
+    es: `Tu reserva de Camel Global ${JOB} ha sido cancelada`,
+    fr: `Votre réservation Camel Global ${JOB} a été annulée`,
+    it: `La tua prenotazione Camel Global ${JOB} è stata annullata`,
+    pt: `A sua reserva Camel Global ${JOB} foi cancelada`,
+    de: `Ihre Camel Global Buchung ${JOB} wurde storniert`,
+  };
+  const heading: Record<Locale, string> = { en: "Booking Cancelled", es: "Reserva cancelada", fr: "Réservation annulée", it: "Prenotazione annullata", pt: "Reserva cancelada", de: "Buchung storniert" };
+  const hi: Record<Locale, string> = { en: `Hi ${name},`, es: `Hola ${name},`, fr: `Bonjour ${name},`, it: `Ciao ${name},`, pt: `Olá ${name},`, de: `Hallo ${name},` };
+  const line: Record<Locale, string> = {
+    en: `Your booking ${JOB} with ${opts.companyName} has been cancelled.`,
+    es: `Tu reserva ${JOB} con ${opts.companyName} ha sido cancelada.`,
+    fr: `Votre réservation ${JOB} avec ${opts.companyName} a été annulée.`,
+    it: `La tua prenotazione ${JOB} con ${opts.companyName} è stata annullata.`,
+    pt: `A sua reserva ${JOB} com ${opts.companyName} foi cancelada.`,
+    de: `Ihre Buchung ${JOB} bei ${opts.companyName} wurde storniert.`,
+  };
+  const reasonLbl: Record<Locale, string> = { en: "Reason:", es: "Motivo:", fr: "Motif :", it: "Motivo:", pt: "Motivo:", de: "Grund:" };
+  const pickupLbl: Record<Locale, string> = { en: "Pickup was:", es: "Recogida:", fr: "Prise en charge :", it: "Ritiro:", pt: "Recolha:", de: "Abholung:" };
+  const locLbl: Record<Locale, string> = { en: "Location:", es: "Ubicación:", fr: "Lieu :", it: "Luogo:", pt: "Local:", de: "Ort:" };
+  const boxLabel: Record<Locale, string> = opts.isWithin48
+    ? { en: "⚠ Partial Refund", es: "⚠ Reembolso parcial", fr: "⚠ Remboursement partiel", it: "⚠ Rimborso parziale", pt: "⚠ Reembolso parcial", de: "⚠ Teilweise Rückerstattung" }
+    : { en: "✅ Full Refund", es: "✅ Reembolso completo", fr: "✅ Remboursement intégral", it: "✅ Rimborso completo", pt: "✅ Reembolso total", de: "✅ Vollständige Rückerstattung" };
+  const note: Record<Locale, string> = opts.isWithin48
+    ? {
+        en: `As this cancellation is within 48 hours of your pickup time, the car hire fee of ${opts.carHireText} is non-refundable. Your fuel deposit of ${opts.refundAmountText} will be refunded in full.`,
+        es: `Como esta cancelación se realiza dentro de las 48 horas previas a la recogida, la tarifa de alquiler de ${opts.carHireText} no es reembolsable. Tu depósito de combustible de ${opts.refundAmountText} se reembolsará íntegramente.`,
+        fr: `Cette annulation ayant lieu moins de 48 heures avant l'heure de prise en charge, les frais de location de ${opts.carHireText} ne sont pas remboursables. Votre dépôt de carburant de ${opts.refundAmountText} sera intégralement remboursé.`,
+        it: `Poiché questa cancellazione avviene entro 48 ore dall'orario di ritiro, la tariffa di noleggio di ${opts.carHireText} non è rimborsabile. Il tuo deposito carburante di ${opts.refundAmountText} sarà rimborsato per intero.`,
+        pt: `Como este cancelamento ocorre dentro das 48 horas anteriores à recolha, a taxa de aluguer de ${opts.carHireText} não é reembolsável. O seu depósito de combustível de ${opts.refundAmountText} será totalmente reembolsado.`,
+        de: `Da diese Stornierung innerhalb von 48 Stunden vor Ihrer Abholzeit erfolgt, ist die Mietgebühr von ${opts.carHireText} nicht erstattungsfähig. Ihre Kraftstoffkaution von ${opts.refundAmountText} wird vollständig erstattet.`,
+      }
+    : {
+        en: `As this cancellation is more than 48 hours before your pickup time, a full refund of ${opts.refundAmountText} will be processed.`,
+        es: `Como esta cancelación se realiza con más de 48 horas de antelación a la recogida, se procesará un reembolso completo de ${opts.refundAmountText}.`,
+        fr: `Cette annulation ayant lieu plus de 48 heures avant l'heure de prise en charge, un remboursement intégral de ${opts.refundAmountText} sera effectué.`,
+        it: `Poiché questa cancellazione avviene più di 48 ore prima dell'orario di ritiro, verrà elaborato un rimborso completo di ${opts.refundAmountText}.`,
+        pt: `Como este cancelamento ocorre com mais de 48 horas de antecedência em relação à recolha, será processado um reembolso total de ${opts.refundAmountText}.`,
+        de: `Da diese Stornierung mehr als 48 Stunden vor Ihrer Abholzeit erfolgt, wird eine vollständige Rückerstattung von ${opts.refundAmountText} veranlasst.`,
+      };
+  const totalLbl: Record<Locale, string> = { en: "Refund total:", es: "Total del reembolso:", fr: "Total du remboursement :", it: "Totale rimborso:", pt: "Total do reembolso:", de: "Erstattungsbetrag:" };
+  const allow: Record<Locale, string> = {
+    en: "Please allow 5–10 business days for the refund to appear on your statement.",
+    es: "El reembolso puede tardar de 5 a 10 días hábiles en aparecer en tu extracto.",
+    fr: "Comptez 5 à 10 jours ouvrés pour que le remboursement apparaisse sur votre relevé.",
+    it: "Il rimborso può richiedere da 5 a 10 giorni lavorativi per comparire sul tuo estratto conto.",
+    pt: "O reembolso pode demorar 5 a 10 dias úteis a aparecer no seu extrato.",
+    de: "Bitte rechnen Sie mit 5–10 Werktagen, bis die Rückerstattung auf Ihrem Kontoauszug erscheint.",
+  };
+  const questions: Record<Locale, string> = { en: "Questions? Email", es: "¿Preguntas? Escribe a", fr: "Des questions ? Écrivez à", it: "Domande? Scrivi a", pt: "Dúvidas? Escreva para", de: "Fragen? Schreiben Sie an" };
+  const cta: Record<Locale, string> = { en: "View My Bookings", es: "Ver mis reservas", fr: "Voir mes réservations", it: "Vedi le mie prenotazioni", pt: "Ver as minhas reservas", de: "Meine Buchungen ansehen" };
+
+  const borderCol = opts.isWithin48 ? "#ff7a00" : "#22c55e";
+  const bgCol = opts.isWithin48 ? "#fff8f4" : "#f0fff4";
+  const body = `
+    <p>${t(hi)}</p>
+    <p>${t(line)}</p>
+    ${opts.reason ? `<p><strong>${t(reasonLbl)}</strong> ${opts.reason}</p>` : ""}
+    <p><strong>${t(pickupLbl)}</strong> ${opts.pickupTime || "—"}<br/><strong>${t(locLbl)}</strong> ${opts.pickupAddress || "—"}</p>
+    <div style="background:${bgCol};border:1px solid ${borderCol};padding:16px;margin:16px 0;">
+      <p style="margin:0;font-weight:700;">${t(boxLabel)}</p>
+      <p style="margin:8px 0 0;font-size:14px;">${t(note)}</p>
+      <p style="margin:8px 0 0;font-weight:700;">${t(totalLbl)} ${opts.refundAmountText}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#666;">${t(allow)}</p>
+    </div>
+    <p>${t(questions)} <a href="mailto:contact@camel-global.com" style="color:#ff7a00;">contact@camel-global.com</a></p>
+    <a href="${opts.siteUrl}/bookings" style="display:inline-block;background:#ff7a00;color:#fff;padding:12px 24px;text-decoration:none;font-weight:700;margin-top:8px;">${t(cta)}</a>`;
+
+  return sendEmail({ to, subject: t(subject), html: wrapBrand(t(heading), body, locale) });
+}
+
+export async function sendPartnerBookingCancelledByCustomerEmail(to: string, opts: {
+  locale?: Locale;
+  jobNo: string;
+  customerName?: string | null;
+  reason?: string | null;
+  pickupTime?: string | null;
+  isWithin48: boolean;
+  refundAmountText: string;
+}) {
+  const locale = opts.locale ?? "en";
+  const t = <T,>(m: Record<Locale, T>) => m[locale] ?? m.en;
+  const JOB = opts.jobNo;
+
+  const subject: Record<Locale, string> = {
+    en: `Booking ${JOB} cancelled by customer`,
+    es: `Reserva ${JOB} cancelada por el cliente`,
+    fr: `Réservation ${JOB} annulée par le client`,
+    it: `Prenotazione ${JOB} annullata dal cliente`,
+    pt: `Reserva ${JOB} cancelada pelo cliente`,
+    de: `Buchung ${JOB} vom Kunden storniert`,
+  };
+  const heading: Record<Locale, string> = {
+    en: "Booking Cancelled by Customer", es: "Reserva cancelada por el cliente", fr: "Réservation annulée par le client",
+    it: "Prenotazione annullata dal cliente", pt: "Reserva cancelada pelo cliente", de: "Buchung vom Kunden storniert",
+  };
+  const line: Record<Locale, string> = {
+    en: `Booking ${JOB} has been cancelled by the customer.`,
+    es: `La reserva ${JOB} ha sido cancelada por el cliente.`,
+    fr: `La réservation ${JOB} a été annulée par le client.`,
+    it: `La prenotazione ${JOB} è stata annullata dal cliente.`,
+    pt: `A reserva ${JOB} foi cancelada pelo cliente.`,
+    de: `Buchung ${JOB} wurde vom Kunden storniert.`,
+  };
+  const custLbl: Record<Locale, string> = { en: "Customer:", es: "Cliente:", fr: "Client :", it: "Cliente:", pt: "Cliente:", de: "Kunde:" };
+  const pickupLbl: Record<Locale, string> = { en: "Pickup was:", es: "Recogida:", fr: "Prise en charge :", it: "Ritiro:", pt: "Recolha:", de: "Abholung:" };
+  const refundLbl: Record<Locale, string> = { en: "Refund:", es: "Reembolso:", fr: "Remboursement :", it: "Rimborso:", pt: "Reembolso:", de: "Rückerstattung:" };
+  const refundKind: Record<Locale, string> = opts.isWithin48
+    ? { en: "Partial refund (fuel deposit only — within 48hrs)", es: "Reembolso parcial (solo depósito de combustible — dentro de 48 h)", fr: "Remboursement partiel (dépôt de carburant uniquement — moins de 48 h)", it: "Rimborso parziale (solo deposito carburante — entro 48 h)", pt: "Reembolso parcial (apenas depósito de combustível — dentro de 48 h)", de: "Teilweise Rückerstattung (nur Kraftstoffkaution — innerhalb von 48 Std.)" }
+    : { en: "Full refund", es: "Reembolso completo", fr: "Remboursement intégral", it: "Rimborso completo", pt: "Reembolso total", de: "Vollständige Rückerstattung" };
+  const reasonLbl: Record<Locale, string> = { en: "Reason:", es: "Motivo:", fr: "Motif :", it: "Motivo:", pt: "Motivo:", de: "Grund:" };
+  const noAction: Record<Locale, string> = {
+    en: "No action required from you.", es: "No es necesario que hagas nada.", fr: "Aucune action n'est requise de votre part.",
+    it: "Non è richiesta alcuna azione da parte tua.", pt: "Não é necessária qualquer ação da sua parte.", de: "Von Ihnen ist keine Aktion erforderlich.",
+  };
+
+  const body = `
+    <p>${t(line)}</p>
+    <p>
+      <strong>${t(custLbl)}</strong> ${opts.customerName || "—"}<br/>
+      <strong>${t(pickupLbl)}</strong> ${opts.pickupTime || "—"}<br/>
+      <strong>${t(refundLbl)}</strong> ${t(refundKind)} — ${opts.refundAmountText}
+    </p>
+    ${opts.reason ? `<p><strong>${t(reasonLbl)}</strong> ${opts.reason}</p>` : ""}
+    <p>${t(noAction)}</p>`;
+
+  return sendEmail({ to, subject: t(subject), html: wrapBrand(t(heading), body, locale) });
+}
+
+// ---------------------------------------------------------------------------
 // Customer emails — all accept optional locale (default "en")
 // PDFs (receipt, completion statement) stay English — NTUK is a UK company
 // ---------------------------------------------------------------------------
