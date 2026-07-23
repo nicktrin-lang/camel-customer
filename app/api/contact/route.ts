@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyHCaptcha } from "@/lib/hcaptcha";
 import { rateLimit, getIp } from "@/lib/rateLimit";
+import { coerceLocale, Locale } from "@/lib/email";
 
 const FROM_EMAIL = "Camel Global <noreply@camel-global.com>";
 
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
   let body: {
     name?: string; company?: string; email?: string;
     subject?: string; message?: string; captchaToken?: string; source?: string;
+    locale?: string;
   };
   try {
     body = await req.json();
@@ -65,6 +67,9 @@ export async function POST(req: Request) {
   }
 
   const { name, email, subject, message, captchaToken, source, company } = body;
+  // Auto-reply language = the language the sender was using on the site (they
+  // may have no account, so no communication_locale). Routed-inbox email stays English.
+  const replyLocale = coerceLocale(body.locale);
   const safeCompany = company ? company.trim().slice(0, 100) : null;
 
   if (!name?.trim() || !email?.trim() || !subject?.trim() || !message?.trim()) {
@@ -125,24 +130,50 @@ export async function POST(req: Request) {
       `,
     });
 
-    // Auto-reply to sender
+    // Auto-reply to sender (localized to the sender's site language)
+    const tL = <T,>(m: Record<Locale, T>) => m[replyLocale] ?? m.en;
+    const arSubject: Record<Locale, string> = {
+      en: "We've received your message — Camel Global", es: "Hemos recibido tu mensaje — Camel Global", fr: "Nous avons bien reçu votre message — Camel Global",
+      it: "Abbiamo ricevuto il tuo messaggio — Camel Global", pt: "Recebemos a sua mensagem — Camel Global", de: "Wir haben Ihre Nachricht erhalten — Camel Global",
+    };
+    const arHead: Record<Locale, string> = { en: "Thanks for getting in touch", es: "Gracias por ponerte en contacto", fr: "Merci de nous avoir contactés", it: "Grazie per averci contattato", pt: "Obrigado pelo seu contacto", de: "Danke für Ihre Nachricht" };
+    const arHi: Record<Locale, string> = { en: `Hi ${safeName},`, es: `Hola ${safeName},`, fr: `Bonjour ${safeName},`, it: `Ciao ${safeName},`, pt: `Olá ${safeName},`, de: `Hallo ${safeName},` };
+    const arGot: Record<Locale, string> = {
+      en: "We've received your message and will get back to you as soon as we can.",
+      es: "Hemos recibido tu mensaje y te responderemos lo antes posible.",
+      fr: "Nous avons bien reçu votre message et vous répondrons dès que possible.",
+      it: "Abbiamo ricevuto il tuo messaggio e ti risponderemo il prima possibile.",
+      pt: "Recebemos a sua mensagem e responderemos assim que possível.",
+      de: "Wir haben Ihre Nachricht erhalten und melden uns so bald wie möglich.",
+    };
+    const arYourMsg: Record<Locale, string> = { en: "Your message:", es: "Tu mensaje:", fr: "Votre message :", it: "Il tuo messaggio:", pt: "A sua mensagem:", de: "Ihre Nachricht:" };
+    const arUrgent: Record<Locale, string> = {
+      en: "In the meantime, if your enquiry is urgent you can reply directly to this email.",
+      es: "Mientras tanto, si tu consulta es urgente, puedes responder directamente a este correo.",
+      fr: "Entre-temps, si votre demande est urgente, vous pouvez répondre directement à cet e-mail.",
+      it: "Nel frattempo, se la tua richiesta è urgente, puoi rispondere direttamente a questa email.",
+      pt: "Entretanto, se o seu pedido for urgente, pode responder diretamente a este email.",
+      de: "Wenn Ihre Anfrage dringend ist, können Sie in der Zwischenzeit direkt auf diese E-Mail antworten.",
+    };
+    const arRegards: Record<Locale, string> = { en: "Best regards,", es: "Saludos,", fr: "Cordialement,", it: "Cordiali saluti,", pt: "Com os melhores cumprimentos,", de: "Mit freundlichen Grüßen," };
+    const arTeam: Record<Locale, string> = { en: "The Camel Global Team", es: "El equipo de Camel Global", fr: "L'équipe Camel Global", it: "Il team di Camel Global", pt: "A equipa Camel Global", de: "Das Camel Global Team" };
     await sendContactEmail({
       to: safeEmail,
-      subject: "We've received your message — Camel Global",
+      subject: tL(arSubject),
       html: `
         <div style="font-family:system-ui,-apple-system,Arial;color:#222;line-height:1.6;max-width:600px;">
           <div style="background:#000;padding:20px 28px;">
-            <h2 style="color:#fff;margin:0;font-size:18px;">Thanks for getting in touch</h2>
+            <h2 style="color:#fff;margin:0;font-size:18px;">${tL(arHead)}</h2>
           </div>
           <div style="background:#f8fafc;padding:24px 28px;border:1px solid #e2e8f0;">
-            <p>Hi ${safeName},</p>
-            <p>We've received your message and will get back to you as soon as we can.</p>
+            <p>${tL(arHi)}</p>
+            <p>${tL(arGot)}</p>
             <p style="background:#fff;border:1px solid #e2e8f0;padding:14px;font-size:13px;color:#475569;">
-              <strong>Your message:</strong><br /><br />
+              <strong>${tL(arYourMsg)}</strong><br /><br />
               <em>${safeMessage.slice(0, 500)}${safeMessage.length > 500 ? "…" : ""}</em>
             </p>
-            <p>In the meantime, if your enquiry is urgent you can reply directly to this email.</p>
-            <p style="margin-top:24px;">Best regards,<br /><strong>The Camel Global Team</strong></p>
+            <p>${tL(arUrgent)}</p>
+            <p style="margin-top:24px;">${tL(arRegards)}<br /><strong>${tL(arTeam)}</strong></p>
           </div>
         </div>
       `,
