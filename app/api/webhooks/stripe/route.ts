@@ -532,6 +532,76 @@ export async function POST(req: NextRequest) {
 
       console.log(`payment_intent.succeeded: booking ${bookingId} — currency ${currency}, fee ${feeData.stripe_fee} ${feeData.stripe_fee_currency}, customer locale ${customerLocale}, partner locale ${partnerLocale}`);
     }
+
+    // ── Chargeback: auto-hold the payout (audit #8) ───────────────────────────
+    // A dispute debits CAMEL's platform balance. If the partner hasn't been paid
+    // yet, holding the payout stops us paying money we've just lost. If they HAVE
+    // been paid (AU/NZ can't be auto-reversed), we record what they owe us in the
+    // recovery ledger to deduct from a future payout. Either way, alert an admin.
+    if (event.type === "charge.dispute.created") {
+      const dispute  = event.data.object as Stripe.Dispute;
+      const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id || null;
+      const piId     = typeof dispute.payment_intent === "string" ? dispute.payment_intent : dispute.payment_intent?.id || null;
+
+      // Find the payment (hence booking) this dispute belongs to.
+      let payment: { id: string; booking_id: string | null } | null = null;
+      if (chargeId) {
+        const { data } = await db.from("payments").select("id, booking_id").eq("stripe_charge_id", chargeId).maybeSingle();
+        payment = data;
+      }
+      if (!payment && piId) {
+        const { data } = await db.from("payments").select("id, booking_id").eq("stripe_payment_intent_id", piId).maybeSingle();
+        payment = data;
+      }
+
+      const bookingId = payment?.booking_id || null;
+      let booking: { partner_user_id: string | null; payout_status: string | null; settled_partner_net: number | null; currency: string | null; job_number: number | null } | null = null;
+      if (bookingId) {
+        const { data } = await db
+          .from("partner_bookings")
+          .select("partner_user_id, payout_status, settled_partner_net, currency, job_number")
+          .eq("id", bookingId)
+          .maybeSingle();
+        booking = data;
+
+        // Always hold — the cron skips payout_hold=true on partner_bookings (the
+        // only table it reads for the hold). Belt for any state.
+        await db.from("partner_bookings").update({ payout_hold: true }).eq("id", bookingId);
+
+        // Already paid (or in flight) → we can't cleanly reverse, so record the debt.
+        if (booking && (booking.payout_status === "paid" || booking.payout_status === "paying")) {
+          await db.from("partner_recovery_ledger").insert({
+            partner_user_id: booking.partner_user_id,
+            booking_id:      bookingId,
+            amount:          Number(booking.settled_partner_net || 0),
+            currency:        booking.currency || "EUR",
+            reason:          `chargeback ${dispute.id} (${dispute.reason || "unknown"})`,
+            status:          "outstanding",
+          }).then(() => {}, (e: any) => console.error("recovery ledger insert failed:", e?.message));
+        }
+      }
+
+      const adminEmails = String(process.env.CAMEL_ADMIN_EMAILS || "").split(",").map(e => e.trim()).filter(Boolean);
+      const already = booking?.payout_status === "paid" || booking?.payout_status === "paying";
+      for (const to of adminEmails) {
+        await sendEmail({
+          to,
+          subject: `[Admin] Chargeback opened — ${booking?.job_number ? `#${booking.job_number}` : (bookingId || dispute.id)}`,
+          html: `<div style="font-family:system-ui,sans-serif;color:#222;max-width:600px;">
+            <p><strong>A customer chargeback was opened.</strong> The payout has been auto-held.</p>
+            <p><strong>Dispute:</strong> ${dispute.id}<br/>
+               <strong>Reason:</strong> ${dispute.reason || "unknown"}<br/>
+               <strong>Amount:</strong> ${(dispute.amount / 100).toFixed(2)} ${String(dispute.currency).toUpperCase()}<br/>
+               <strong>Booking:</strong> ${bookingId || "not matched"}<br/>
+               <strong>Payout status:</strong> ${booking?.payout_status || "unknown"}</p>
+            ${already
+              ? `<p><strong>The partner was already paid.</strong> A recovery-ledger entry was written for ${Number(booking?.settled_partner_net || 0)} ${booking?.currency || ""} to reclaim from a future payout. Respond to the dispute in Stripe.</p>`
+              : `<p>The payout is held; no partner money has moved. Respond to the dispute in Stripe.</p>`}
+          </div>`,
+        }).catch(e => console.error("Admin chargeback email failed:", e?.message));
+      }
+      console.log(`charge.dispute.created: ${dispute.id} — booking ${bookingId || "unmatched"}, held; ledger=${already}`);
+    }
   } catch (e: any) {
     console.error("Webhook handler error:", e.message);
     return NextResponse.json({ error: "Handler error" }, { status: 500 });
