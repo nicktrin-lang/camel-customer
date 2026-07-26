@@ -99,9 +99,15 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+// GA only fires on the REAL public hosts. localhost, Vercel preview (*.vercel.app),
+// IPs and any unknown host return "" so no gtag is injected — this is what stopped
+// dev + preview traffic polluting the production property (the "localhost:3000"
+// referrals and preview-crawler bot hits).
 function getGaId(host: string): string {
-  if (host.includes("test.camel-global.com")) return "G-G90QB28J12";
-  return "G-1Y758X38G4";
+  const h = host.toLowerCase();
+  if (h.includes("test.camel-global.com")) return "G-G90QB28J12";              // staging property
+  if (h === "camel-global.com" || h === "www.camel-global.com") return "G-1Y758X38G4"; // production
+  return "";                                                                    // localhost / preview / unknown → no tracking
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -116,10 +122,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <script dangerouslySetInnerHTML={{
-          __html: `window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=gtag;gtag('js',new Date());gtag('config','${gaId}',{send_page_view:true});`,
-        }} />
-        <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} />
+        {gaId && (
+          <>
+            <script dangerouslySetInnerHTML={{
+              __html: `window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}window.gtag=gtag;gtag('js',new Date());gtag('config','${gaId}',{send_page_view:true});`,
+            }} />
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} />
+          </>
+        )}
       </head>
       <body className={`${font.variable} min-h-screen flex flex-col`}>
         <ClientRootLayout fontClass={font.variable}>
