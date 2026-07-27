@@ -269,6 +269,24 @@ export default function CheckoutPage({ params }: { params: Promise<{ bid_id: str
       }
       setIntent(json);
       setLoading(false);
+
+      // ── GA4 funnel: begin_checkout ────────────────────────────────────────
+      // Fires once the checkout is initialised with a real bid, giving the
+      // booking funnel its "reached checkout" step (session_start → begin_checkout
+      // → purchase). purchase is sent server-side from the Stripe webhook.
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "begin_checkout", {
+          currency: String(json.currency || "EUR").toUpperCase(),
+          value:    Number(json.amount_total || 0),
+          items: [{
+            item_id:   bidId,
+            item_name: "Car hire booking",
+            item_brand: json.partner_name || undefined,
+            price:     Number(json.amount_car_hire || 0),
+            quantity:  1,
+          }],
+        });
+      }
     }
     init();
   }, [bidId, supabase, router]);

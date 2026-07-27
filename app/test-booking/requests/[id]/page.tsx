@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useCurrency } from "@/lib/useCurrency";
@@ -665,6 +665,7 @@ export default function TestBookingRequestDetailPage({ params }: { params: Promi
   const [error,            setError]            = useState<string | null>(null);
   const [ok,               setOk]              = useState<string | null>(null);
   const [data,             setData]             = useState<ResponseShape | null>(null);
+  const viewItemFired = useRef(false);   // GA4 view_item fires once per mount
   const [timeLabel,        setTimeLabel]        = useState("—");
   const [expired,          setExpired]          = useState(false);
   const [collectionNotes,  setCollectionNotes]  = useState("");
@@ -710,6 +711,26 @@ export default function TestBookingRequestDetailPage({ params }: { params: Promi
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "Failed to load request.");
       setData(json);
+
+      // ── GA4 funnel: view_item ─────────────────────────────────────────────
+      // Fires once when the customer first sees bids (offers) for their request
+      // and hasn't booked yet — the "viewed offers" step of the booking funnel
+      // (session_start → view_item → begin_checkout → purchase).
+      if (!viewItemFired.current && Array.isArray(json.bids) && json.bids.length > 0 && !json.booking
+          && typeof window !== "undefined" && typeof window.gtag === "function") {
+        viewItemFired.current = true;
+        window.gtag("event", "view_item", {
+          item_list_name: "Car hire bids",
+          items: json.bids.slice(0, 10).map((b: any) => ({
+            item_id:    b.id,
+            item_name:  "Car hire bid",
+            item_brand: b.partner_company_name || undefined,
+            price:      Number(b.car_hire_price || 0),
+            quantity:   1,
+          })),
+        });
+      }
+
       if (json.booking) {
         setCollectionNotes(json.booking.collection_customer_notes || "");
         setReturnNotes(json.booking.return_customer_notes || "");
