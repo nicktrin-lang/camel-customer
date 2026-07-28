@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuide, relatedGuides, getAllGuideParams, isGuideLang } from "@/lib/guides";
+import GuideCountryNav from "@/app/components/GuideCountryNav";
 
 export const dynamicParams = true;
 
@@ -78,15 +79,18 @@ export default async function GuidePost({
         </div>
       </header>
 
-      {/* Body — Markdown rendered as-is, styled via .guide-body */}
+      {/* Body — country sidebar (left) + article (right) */}
       <div className="w-full bg-white px-6 py-14">
+        <div className="mx-auto flex max-w-5xl flex-col gap-8 md:flex-row md:gap-12">
+          <GuideCountryNav lang={lang} selected={guide.country} />
+          <div className="min-w-0 flex-1">
         <div
-          className="guide-body mx-auto max-w-3xl"
+          className="guide-body max-w-3xl"
           dangerouslySetInnerHTML={{ __html: stripLeadingH1(guide.html, guide.title) }}
         />
 
         {/* Booking CTA — the customer funnel is booking */}
-        <div className="mx-auto mt-14 max-w-3xl border-t border-black/10 pt-10">
+        <div className="mt-14 max-w-3xl border-t border-black/10 pt-10">
           <div className="bg-black px-8 py-10 text-center">
             <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">
               Ready to skip the queue?
@@ -105,7 +109,7 @@ export default async function GuidePost({
 
         {/* Related guides — same language only */}
         {related.length > 0 && (
-          <div className="mx-auto mt-14 max-w-3xl">
+          <div className="mt-14 max-w-3xl">
             <h2 className="mb-6 text-xs font-black uppercase tracking-widest text-black/40">
               More guides
             </h2>
@@ -126,6 +130,8 @@ export default async function GuidePost({
             </ul>
           </div>
         )}
+          </div>
+        </div>
       </div>
     </article>
   );
