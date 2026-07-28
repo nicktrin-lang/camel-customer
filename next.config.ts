@@ -25,6 +25,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The guides routes read Markdown from content/guides/ with fs at request time.
+  // Force those files into the serverless bundle so runtime reads work on Vercel.
+  outputFileTracingIncludes: {
+    "/[lang]/guides": ["./content/guides/**/*"],
+    "/[lang]/guides/[slug]": ["./content/guides/**/*"],
+    "/sitemap.xml": ["./content/guides/**/*"],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

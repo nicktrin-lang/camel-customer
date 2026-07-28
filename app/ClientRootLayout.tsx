@@ -12,6 +12,12 @@ import ChatWidget from "@/app/components/ChatWidget";
 import { LanguageProvider, useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
+// Localized label for the "Guides" nav link (kept inline — lib/guides is
+// server-only and can't be imported into this client component).
+const GUIDES_NAV_LABEL: Record<Locale, string> = {
+  en: "Guides", es: "Guías", fr: "Guides", it: "Guide", pt: "Guias", de: "Ratgeber",
+};
+
 function LanguageBoxes({ compact = false }: { compact?: boolean }) {
   const { locale, setLocale } = useLanguage();
   const options: { code: Locale; label: string }[] = [
@@ -166,6 +172,7 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
               {/* Desktop nav */}
               <nav className="hidden md:flex items-center gap-3">
                 <LanguageBoxes compact />
+                <Link href={`/${locale}/guides`} className="text-sm font-bold text-white hover:underline">{GUIDES_NAV_LABEL[locale] ?? "Guides"}</Link>
                 {isCustomerLoggedIn ? (
                   <>
                     <Link href={newBookingHref} className="bg-[#ff7a00] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90 transition-opacity">{t("common.newBooking")}</Link>
@@ -206,6 +213,9 @@ function InnerLayout({ children }: { children: React.ReactNode }) {
                       <span className="block text-xs font-black uppercase tracking-widest text-white/40 mb-2">{t("nav.language")}</span>
                       <LanguageBoxes />
                     </div>
+                    <Link href={`/${locale}/guides`} onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
+                      {GUIDES_NAV_LABEL[locale] ?? "Guides"}
+                    </Link>
                     {isCustomerLoggedIn ? (
                       <>
                         {customerName && (

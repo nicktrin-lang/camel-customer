@@ -110,13 +110,21 @@ function getGaId(host: string): string {
   return "";                                                                    // localhost / preview / unknown → no tracking
 }
 
+// Guides live at /<lang>/guides/... — set <html lang> to match so each post is
+// declared in the language it's written in. Everything else stays "en".
+function htmlLangFromPath(pathname: string): string {
+  const m = pathname.match(/^\/(en|es|fr|it|pt|de)\/guides(\/|$)/);
+  return m ? m[1] : "en";
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const headerStore = await headers();
   const host = headerStore.get("host") || "";
   const gaId = getGaId(host);
+  const htmlLang = htmlLangFromPath(headerStore.get("x-pathname") || "");
 
   return (
-    <html lang="en">
+    <html lang={htmlLang}>
       <head>
         <link rel="icon" type="image/x-icon" href="/favicon.ico" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
