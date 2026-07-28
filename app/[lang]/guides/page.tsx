@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   isGuideLang,
-  listGuides,
   getGuideLangs,
+  getGuideCountries,
+  guidesByCountry,
+  listAllGuides,
+  countryName,
   GUIDE_LANG_LABEL,
-  GUIDE_LANG_NATIVE,
   type GuideLang,
 } from "@/lib/guides";
 
@@ -47,91 +49,105 @@ export async function generateMetadata({
 
 export default async function GuidesIndex({
   params,
+  searchParams,
 }: {
   params: Promise<{ lang: string }>;
+  searchParams: Promise<{ country?: string }>;
 }) {
   const { lang } = await params;
   if (!isGuideLang(lang)) notFound();
-  const guides = listGuides(lang);
-  const available = getGuideLangs(); // languages that actually have posts
+  const { country } = await searchParams;
+
+  const countries = getGuideCountries(); // countries that actually have posts
+  const selected =
+    country && countries.some((c) => c.code === country.toUpperCase())
+      ? country.toUpperCase()
+      : countries[0]?.code ?? null;
+  const posts = selected ? guidesByCountry(selected) : listAllGuides();
   const label = GUIDE_LANG_LABEL[lang as GuideLang];
 
   return (
     <div className="w-full">
-      {/* Hero — matches the branded content pages (black + orange) */}
-      <section className="w-full bg-black px-6 py-20 text-white">
-        <div className="mx-auto max-w-4xl">
+      {/* Hero */}
+      <section className="w-full bg-black px-6 py-16 text-white sm:py-20">
+        <div className="mx-auto max-w-5xl">
           <p className="mb-3 text-sm font-black uppercase tracking-widest text-[#ff7a00]">
             Camel Global
           </p>
-          <h1 className="mb-6 text-4xl font-black leading-tight text-white md:text-6xl">
+          <h1 className="mb-4 text-4xl font-black leading-tight text-white md:text-6xl">
             {label}
           </h1>
-          <p className="max-w-2xl text-xl font-semibold leading-relaxed text-white">
-            Practical guides to meet &amp; greet car hire — skip the queues, drive away in minutes.
+          <p className="max-w-2xl text-lg font-semibold leading-relaxed text-white md:text-xl">
+            Practical guides to meet &amp; greet car hire — choose a country to explore.
           </p>
         </div>
       </section>
 
-      {/* Language switcher — each language's own posts (a French visitor clicks
-          "Français"). Only languages that have posts are shown. */}
-      {available.length > 0 && (
-        <section className="w-full border-b border-black/10 bg-[#f7f7f7] px-6 py-4">
-          <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2">
-            <span className="mr-2 text-xs font-black uppercase tracking-widest text-black/40">
-              Language
-            </span>
-            {available.map((l) => (
-              <Link
-                key={l}
-                href={`/${l}/guides`}
-                className={`border px-4 py-2 text-sm font-black transition-colors ${
-                  l === lang
-                    ? "border-[#ff7a00] bg-[#ff7a00] text-white"
-                    : "border-black/20 text-black hover:bg-black/5"
-                }`}
-              >
-                {GUIDE_LANG_NATIVE[l]}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Post list */}
-      <section className="w-full bg-white px-6 py-16">
-        <div className="mx-auto max-w-4xl">
-          {guides.length === 0 ? (
-            <p className="text-lg font-semibold text-black/60">
-              No guides in {GUIDE_LANG_NATIVE[lang as GuideLang]} yet
-              {available.length > 0 ? " — pick a language above." : " — check back soon."}
+      {/* Country sidebar (left) + posts (right) */}
+      <section className="w-full bg-white px-6 py-12 sm:py-16">
+        <div className="mx-auto flex max-w-5xl flex-col gap-8 md:flex-row md:gap-12">
+          {/* Country nav — a link per country that holds posts */}
+          <aside className="shrink-0 md:w-56">
+            <p className="mb-3 text-xs font-black uppercase tracking-widest text-black/40">
+              Countries
             </p>
-          ) : (
-            <ul className="divide-y divide-black/10">
-              {guides.map((g) => (
-                <li key={g.slug} className="py-8 first:pt-0">
-                  <Link href={`/${lang}/guides/${g.slug}`} className="group block">
-                    {g.date && (
-                      <p className="mb-2 text-xs font-black uppercase tracking-widest text-[#ff7a00]">
-                        {fmtDate(g.date, lang)}
-                      </p>
-                    )}
-                    <h2 className="text-2xl font-black leading-snug text-black group-hover:text-[#ff7a00] transition-colors md:text-3xl">
-                      {g.title}
-                    </h2>
-                    {g.description && (
-                      <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-black/60">
-                        {g.description}
-                      </p>
-                    )}
-                    <span className="mt-3 inline-block text-sm font-black uppercase tracking-widest text-black group-hover:text-[#ff7a00] transition-colors">
-                      Read guide →
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+            {countries.length === 0 ? (
+              <p className="text-sm font-semibold text-black/50">No guides yet.</p>
+            ) : (
+              <ul className="flex flex-row flex-wrap gap-2 md:flex-col md:gap-1">
+                {countries.map((c) => {
+                  const active = c.code === selected;
+                  return (
+                    <li key={c.code}>
+                      <Link
+                        href={`/${lang}/guides?country=${c.code}`}
+                        className={`flex items-center justify-between gap-3 border px-4 py-2.5 text-sm font-black transition-colors md:border-0 md:border-l-4 md:px-3 ${
+                          active
+                            ? "border-[#ff7a00] bg-[#ff7a00] text-white md:bg-transparent md:text-black"
+                            : "border-black/15 text-black/70 hover:bg-black/5 md:border-transparent md:hover:border-black/20"
+                        }`}
+                      >
+                        <span>{countryName(c.code)}</span>
+                        <span className={active ? "text-white md:text-[#ff7a00]" : "text-black/30"}>{c.count}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </aside>
+
+          {/* Post list for the selected country */}
+          <div className="flex-1">
+            {posts.length === 0 ? (
+              <p className="text-lg font-semibold text-black/60">No guides yet — check back soon.</p>
+            ) : (
+              <ul className="divide-y divide-black/10">
+                {posts.map((g) => (
+                  <li key={`${g.lang}/${g.slug}`} className="py-7 first:pt-0">
+                    <Link href={`/${g.lang}/guides/${g.slug}`} className="group block">
+                      {g.date && (
+                        <p className="mb-2 text-xs font-black uppercase tracking-widest text-[#ff7a00]">
+                          {fmtDate(g.date, g.lang)}
+                        </p>
+                      )}
+                      <h2 className="text-2xl font-black leading-snug text-black transition-colors group-hover:text-[#ff7a00] md:text-3xl">
+                        {g.title}
+                      </h2>
+                      {g.description && (
+                        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-black/60">
+                          {g.description}
+                        </p>
+                      )}
+                      <span className="mt-3 inline-block text-sm font-black uppercase tracking-widest text-black transition-colors group-hover:text-[#ff7a00]">
+                        Read guide →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </section>
     </div>
