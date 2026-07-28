@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuide, relatedGuides, getAllGuideParams, isGuideLang } from "@/lib/guides";
 import GuideCountryNav from "@/app/components/GuideCountryNav";
+import { GuidesCta } from "@/app/components/GuidesText";
 
 export const dynamicParams = true;
 
@@ -89,22 +90,9 @@ export default async function GuidePost({
           dangerouslySetInnerHTML={{ __html: stripLeadingH1(guide.html, guide.title) }}
         />
 
-        {/* Booking CTA — the customer funnel is booking */}
+        {/* Booking CTA — chrome text follows the site language switcher */}
         <div className="mt-14 max-w-3xl border-t border-black/10 pt-10">
-          <div className="bg-black px-8 py-10 text-center">
-            <p className="mb-2 text-sm font-black uppercase tracking-widest text-[#ff7a00]">
-              Ready to skip the queue?
-            </p>
-            <h2 className="mb-6 text-2xl font-black text-white md:text-3xl">
-              Book meet &amp; greet car hire
-            </h2>
-            <Link
-              href="/"
-              className="inline-block w-full max-w-md bg-[#ff7a00] px-8 py-6 text-xl font-black uppercase tracking-wide text-white transition-opacity hover:opacity-90 sm:w-auto sm:px-16"
-            >
-              Book Now
-            </Link>
-          </div>
+          <GuidesCta />
         </div>
 
         {/* Related guides — same language only */}
