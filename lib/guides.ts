@@ -8,8 +8,8 @@ import { marked } from "marked";
 // Content is delivered by the external Growth Engine as one Markdown file per
 // post, split by language, at:  content/guides/<lang>/<slug>.md
 // This module is the ONLY place that reads that content. Presentation lives in
-// the route components. New files are picked up automatically at build time — no
-// code change per post.
+// the route components. New files (including any in sub-folders) are picked up
+// automatically — no code change per post.
 
 export const GUIDE_LANGS = ["en", "es", "fr", "it", "pt", "de"] as const;
 export type GuideLang = (typeof GUIDE_LANGS)[number];
@@ -41,12 +41,24 @@ function langDir(lang: string): string {
   return path.join(CONTENT_ROOT, lang);
 }
 
-function safeReadDir(dir: string): string[] {
+/** All Markdown files under `dir`, RECURSIVELY (absolute paths). Safe if missing. */
+function walkMarkdown(dir: string): string[] {
+  const out: string[] = [];
+  let entries: fs.Dirent[];
   try {
-    return fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".md"));
+    entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
-    return [];
+    return out;
   }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkMarkdown(full));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
 function coerceMeta(data: Record<string, unknown>, fallbackSlug: string): GuideMeta {
@@ -62,33 +74,38 @@ function coerceMeta(data: Record<string, unknown>, fallbackSlug: string): GuideM
   };
 }
 
+function baseSlug(file: string): string {
+  return path.basename(file).replace(/\.md$/i, "");
+}
+
 /** Languages that actually have at least one post on disk. */
 export function getGuideLangs(): GuideLang[] {
-  return GUIDE_LANGS.filter((l) => safeReadDir(langDir(l)).length > 0);
+  return GUIDE_LANGS.filter((l) => walkMarkdown(langDir(l)).length > 0);
 }
 
 /** All posts for a language, newest first by `date`. Meta only (no body). */
 export function listGuides(lang: string): GuideMeta[] {
   if (!isGuideLang(lang)) return [];
-  const dir = langDir(lang);
-  const metas = safeReadDir(dir).map((file) => {
-    const raw = fs.readFileSync(path.join(dir, file), "utf8");
+  const metas = walkMarkdown(langDir(lang)).map((file) => {
+    const raw = fs.readFileSync(file, "utf8");
     const { data } = matter(raw);
-    return coerceMeta(data, file.replace(/\.md$/i, ""));
+    return coerceMeta(data, baseSlug(file));
   });
-  return metas.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  // De-dupe by slug (last wins) so a stray duplicate can't render twice.
+  const bySlug = new Map<string, GuideMeta>();
+  for (const m of metas) bySlug.set(m.slug, m);
+  return [...bySlug.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 }
 
 /** One post by language + slug, with its Markdown body rendered to HTML. */
 export function getGuide(lang: string, slug: string): Guide | null {
   if (!isGuideLang(lang)) return null;
-  const dir = langDir(lang);
-  // Match by filename OR by the frontmatter slug (Growth Engine sets both).
-  for (const file of safeReadDir(dir)) {
-    const raw = fs.readFileSync(path.join(dir, file), "utf8");
+  // Match by the frontmatter slug (authoritative) OR the filename stem.
+  for (const file of walkMarkdown(langDir(lang))) {
+    const raw = fs.readFileSync(file, "utf8");
     const { data, content } = matter(raw);
-    const meta = coerceMeta(data, file.replace(/\.md$/i, ""));
-    if (meta.slug === slug || file.replace(/\.md$/i, "") === slug) {
+    const meta = coerceMeta(data, baseSlug(file));
+    if (meta.slug === slug || baseSlug(file) === slug) {
       const html = marked.parse(content, { async: false }) as string;
       return { ...meta, html, bodyMarkdown: content };
     }
