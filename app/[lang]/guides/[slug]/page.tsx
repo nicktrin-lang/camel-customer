@@ -32,6 +32,8 @@ export async function generateMetadata({
     // layout's "| Camel Global" template doesn't double it up.
     title: { absolute: guide.title },
     description: guide.description,
+    robots: { index: true, follow: true }, // guides are public + indexable
+
     alternates: { canonical },
     openGraph: {
       title: guide.title,
@@ -95,9 +97,9 @@ export default async function GuidePost({
             </h2>
             <Link
               href="/book"
-              className="inline-block bg-[#ff7a00] px-8 py-4 text-base font-black text-white transition-opacity hover:opacity-90"
+              className="inline-block bg-[#ff7a00] px-14 py-6 text-xl font-black uppercase tracking-wide text-white transition-opacity hover:opacity-90"
             >
-              Get live bids →
+              Book Now
             </Link>
           </div>
         </div>

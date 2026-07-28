@@ -3,11 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+import { useLanguage } from "@/lib/i18n/LanguageContext";
 
 const year = new Date().getFullYear();
 
 export default function Footer() {
   const { t } = useTranslation();
+  const { locale } = useLanguage();
 
   return (
     <footer className="w-full bg-black text-white">
@@ -46,6 +48,7 @@ export default function Footer() {
             <div className="flex flex-col gap-3">
               <p className="text-xs font-black uppercase tracking-widest text-white/50">{t("footer.company")}</p>
               <Link href="/about"                                         className="text-sm font-bold text-white hover:underline">{t("footer.aboutUs")}</Link>
+              <Link href={`/${locale}/guides`}                            className="text-sm font-bold text-white hover:underline">Blog</Link>
               <a    href="https://portal.camel-global.com/partner/signup" className="text-sm font-bold text-white hover:underline">{t("footer.becomePartner")}</a>
               <Link href="/contact"                                        className="text-sm font-bold text-white hover:underline">{t("footer.contact")}</Link>
             </div>
