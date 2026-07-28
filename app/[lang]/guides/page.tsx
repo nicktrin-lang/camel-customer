@@ -38,6 +38,7 @@ export async function generateMetadata({
   return {
     title: { absolute: title },
     description,
+    robots: { index: true, follow: true },
     alternates: { canonical: `${SITE}/${lang}/guides` },
     openGraph: { title, description, url: `${SITE}/${lang}/guides`, type: "website" },
   };
