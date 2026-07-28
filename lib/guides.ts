@@ -122,6 +122,51 @@ export function getAllGuideParams(): { lang: GuideLang; slug: string }[] {
   return out;
 }
 
+/** A post plus the language folder it lives in (drives its URL). */
+export type GuideListItem = GuideMeta & { lang: GuideLang };
+
+/** Every post across ALL languages, newest first. The guides index aggregates
+ *  these so content is reachable no matter which language index you land on. */
+export function listAllGuides(): GuideListItem[] {
+  const out: GuideListItem[] = [];
+  for (const lang of GUIDE_LANGS) {
+    for (const m of listGuides(lang)) out.push({ ...m, lang });
+  }
+  return out.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+}
+
+export type GuideCountry = { code: string; count: number };
+
+/** Distinct countries that have posts (from the `country` frontmatter), with
+ *  counts — drives the country sidebar. */
+export function getGuideCountries(): GuideCountry[] {
+  const counts = new Map<string, number>();
+  for (const p of listAllGuides()) {
+    const c = (p.country || "").toUpperCase();
+    if (!c) continue;
+    counts.set(c, (counts.get(c) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => countryName(a.code).localeCompare(countryName(b.code)));
+}
+
+/** Posts targeting a given country (ISO code), across all languages. */
+export function guidesByCountry(country: string): GuideListItem[] {
+  const code = (country || "").toUpperCase();
+  return listAllGuides().filter((p) => (p.country || "").toUpperCase() === code);
+}
+
+/** ISO 3166-1 alpha-2 → display name for the country sidebar. */
+export const COUNTRY_NAME: Record<string, string> = {
+  ES: "Spain", GB: "United Kingdom", FR: "France", DE: "Germany",
+  IT: "Italy", PT: "Portugal", NL: "Netherlands", IE: "Ireland",
+  US: "United States", CA: "Canada", AU: "Australia", NZ: "New Zealand",
+};
+export function countryName(code: string): string {
+  return COUNTRY_NAME[(code || "").toUpperCase()] || code;
+}
+
 /** A few "related" posts in the same language, excluding the current one. */
 export function relatedGuides(lang: string, currentSlug: string, limit = 3): GuideMeta[] {
   return listGuides(lang)
@@ -137,4 +182,15 @@ export const GUIDE_LANG_LABEL: Record<GuideLang, string> = {
   it: "Guide",
   pt: "Guias",
   de: "Ratgeber",
+};
+
+/** Each language's own name — for the language switcher (a French visitor
+ *  recognises "Français"). */
+export const GUIDE_LANG_NATIVE: Record<GuideLang, string> = {
+  en: "English",
+  es: "Español",
+  fr: "Français",
+  it: "Italiano",
+  pt: "Português",
+  de: "Deutsch",
 };

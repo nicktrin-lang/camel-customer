@@ -95,7 +95,7 @@ export default async function GuidePost({
               Book meet &amp; greet car hire
             </h2>
             <Link
-              href="/book"
+              href="/"
               className="inline-block w-full max-w-md bg-[#ff7a00] px-8 py-6 text-xl font-black uppercase tracking-wide text-white transition-opacity hover:opacity-90 sm:w-auto sm:px-16"
             >
               Book Now
