@@ -138,3 +138,14 @@ export const GUIDE_LANG_LABEL: Record<GuideLang, string> = {
   pt: "Guias",
   de: "Ratgeber",
 };
+
+/** Each language's own name — for the language switcher (a French visitor
+ *  recognises "Français"). */
+export const GUIDE_LANG_NATIVE: Record<GuideLang, string> = {
+  en: "English",
+  es: "Español",
+  fr: "Français",
+  it: "Italiano",
+  pt: "Português",
+  de: "Deutsch",
+};
