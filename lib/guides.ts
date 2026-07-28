@@ -14,6 +14,12 @@ import { marked } from "marked";
 export const GUIDE_LANGS = ["en", "es", "fr", "it", "pt", "de"] as const;
 export type GuideLang = (typeof GUIDE_LANGS)[number];
 
+// The guides index aggregates posts across ALL languages, so /en/guides,
+// /es/guides, … show the same list. To avoid duplicate hub pages in Search
+// Console, every index variant canonicalises to this one primary URL. Posts
+// keep their own per-URL canonicals.
+export const PRIMARY_GUIDE_LANG: GuideLang = "en";
+
 export function isGuideLang(v: string | undefined | null): v is GuideLang {
   return !!v && (GUIDE_LANGS as readonly string[]).includes(v);
 }
