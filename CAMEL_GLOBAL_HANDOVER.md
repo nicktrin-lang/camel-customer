@@ -22,7 +22,69 @@ Working Rules
 - camel-coming-soon is a submodule and always shows modified — ignore it, never `git add` it;
   always `git add <specific-file>`, never `git add .`.
 ═══════════════════════════════════════════════════════════════════════════════
-LATEST SESSION — 2026-07-23  (read this first)
+LATEST SESSION — 2026-07-29  (read this first)
+═══════════════════════════════════════════════════════════════════════════════
+Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost · Stripe AU/NZ confirms
+
+## ✅ MERGED & LIVE this session
+- **Guides engine polish (both sites):** country sidebar now on POST pages too (shared
+  `app/components/GuideCountryNav.tsx`); guides chrome (title, subtitle, Book Now/Join Now CTA)
+  follows the language switcher via client `app/components/GuidesText.tsx`, while the post
+  TITLE + BODY stay in the language they were written; removed "choose a country to explore.";
+  portal full header + footer Guides link restored; English "Guides" heading in English UI
+  (`HomePageContent` guidesHref = `/<uiLocale>/guides`, not the old smart /es link).
+- **SEO — guides index canonical consolidation:** all `/<lang>/guides` index variants aggregate
+  the same posts, so every variant canonicalises to ONE url (`/en/guides`, via
+  `PRIMARY_GUIDE_LANG` in `lib/guides.ts`); sitemap lists that single hub. No hreflang (posts are
+  independent per country).
+- **SITEMAP FIX — the big one (READ THIS, it cost hours).** There were TWO sitemap files:
+  `app/sitemap.ts` AND `app/sitemap.tsx`. **Next serves the `.tsx`.** Every guides edit made to
+  `.ts` (this session AND a prior one) was DEAD CODE, so the live sitemap never listed a single
+  post. FIX: deleted `app/sitemap.ts`, moved the guides logic into the ACTIVE `app/sitemap.tsx`,
+  and made it `export const dynamic = "force-static"`. A dynamic/metadata sitemap route CANNOT
+  read `content/guides` at runtime on Vercel — `outputFileTracingIncludes` does NOT apply to
+  metadata routes (verified via node-file-trace); it must be STATIC so it reads the markdown at
+  BUILD. Both live sitemaps now list every post and self-maintain (new post → deploy →
+  re-prerender). Customer sitemap replaced its request-host staging check (which forced it
+  dynamic) with `process.env.VERCEL_ENV !== 'production'`. **RULE: exactly ONE sitemap file per
+  repo, and it must be static.**
+
+## ⚙️ Workflow / infra facts (durable)
+- **Growth Engine auto-merges its own content.** It authenticates with a GitHub token = Nick's
+  admin account, which is in the branch-ruleset bypass list, so it opens AND merges its own
+  `growth-engine/*` guide PRs with no review. No Camel-side auto-merge workflow is needed (one was
+  drafted then deleted as redundant). New posts land as `content/guides/<lang>/<slug>.md`.
+- **Never-merge-PRs:** Nick added a Claude Code permission rule `Bash(gh pr merge:*)`. Claude now
+  merges its own code PRs via `gh pr merge <n> --admin --squash --delete-branch`. Nick merges
+  nothing. NOTE: the session safety classifier blocks direct `git push origin main`, `gh` merge
+  WITHOUT that rule, ruleset edits, and committing GitHub workflow files — the permission rule is
+  what unblocks gh merge.
+- **Vercel "Ignored Build Step":** portal had a git-diff check that did NOT watch `./content`, so
+  guide-only deploys were CANCELED (a merged post never deployed) — Nick added `./content`. The
+  customer project has NO ignored build step (always builds).
+
+## ⏳ PENDING (Nick's actions — not done yet)
+- **Vercel double-deploy cost:** every change builds a Preview (branch) + a Production (main) =
+  2 builds. To deploy production only, set the Ignored Build Step in BOTH projects
+  (`camel-portal-live` + `camel-customer-live`, Settings → Build and Deployment) to:
+  `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` — skips previews (canceled ~2s), always
+  builds production. This REPLACES the portal's content-diff check (fine — production then never
+  skips a post). NOT YET APPLIED.
+- **Stripe AU/NZ (recorded in `~/camel-portal/STRIPE_REWRITE_DESIGN.md`, Anannya 2026-07-29):**
+  (1) enable MCS/ACP self-serve at Dashboard → Settings → Connect → Multi-Currency Settlement
+  toggle — VERIFY it gives the PLATFORM a retained AUD balance to fund OutboundPayments, not
+  merely per-connected-account settlement; (2) open a Wise UK account with UK sort code/account
+  DENOMINATED IN AUD (not Australian BSB) — confirmed correct; (3) sandbox Global Payouts is
+  ENABLED on `acct_1TwWcWG5yRPYnAl6`. Then dev-test `lib/portal/stripeGlobalPayouts.ts` (portal
+  repo, still "written from docs, unverified") against the sandbox. AU/NZ code (Units 1-6) lives
+  on portal branch `claude/onboarding-country-aunz-9bc42f`, not merged.
+- **Growth Engine country/language** is set per project via its Target Countries setting in the
+  Growth Engine app (`~/growth-engine`, a SEPARATE repo). Nick manages this himself (had the wrong
+  country set once → an English UK post landed in the ES portal). Not a Camel-side concern.
+- **Admin blog CMS** (manage both blogs from the admin portal) — still an open idea, not started.
+
+═══════════════════════════════════════════════════════════════════════════════
+PREVIOUS SESSION — 2026-07-23
 ═══════════════════════════════════════════════════════════════════════════════
 
 ## ✅ DONE & LIVE — Stripe payment system rewrite (platform-hold model)
