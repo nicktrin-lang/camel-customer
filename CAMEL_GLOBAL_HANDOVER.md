@@ -59,17 +59,13 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
   nothing. NOTE: the session safety classifier blocks direct `git push origin main`, `gh` merge
   WITHOUT that rule, ruleset edits, and committing GitHub workflow files — the permission rule is
   what unblocks gh merge.
-- **Vercel "Ignored Build Step":** portal had a git-diff check that did NOT watch `./content`, so
-  guide-only deploys were CANCELED (a merged post never deployed) — Nick added `./content`. The
-  customer project has NO ignored build step (always builds).
+- **Vercel "Ignored Build Step" (both projects, current — Nick, 2026-07-29):**
+  `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` — builds production, SKIPS previews
+  (canceled ~2s) to kill the Preview+Production double-build. This REPLACED the portal's old
+  git-diff content check (which had once canceled guide-only deploys by not watching `./content`).
+  Production now always builds → never skips a post.
 
 ## ⏳ PENDING (Nick's actions — not done yet)
-- **Vercel double-deploy cost:** every change builds a Preview (branch) + a Production (main) =
-  2 builds. To deploy production only, set the Ignored Build Step in BOTH projects
-  (`camel-portal-live` + `camel-customer-live`, Settings → Build and Deployment) to:
-  `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` — skips previews (canceled ~2s), always
-  builds production. This REPLACES the portal's content-diff check (fine — production then never
-  skips a post). NOT YET APPLIED.
 - **Stripe AU/NZ (recorded in `~/camel-portal/STRIPE_REWRITE_DESIGN.md`, Anannya 2026-07-29):**
   (1) enable MCS/ACP self-serve at Dashboard → Settings → Connect → Multi-Currency Settlement
   toggle — VERIFY it gives the PLATFORM a retained AUD balance to fund OutboundPayments, not
