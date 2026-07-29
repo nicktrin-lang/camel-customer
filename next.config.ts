@@ -30,7 +30,11 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/[lang]/guides": ["./content/guides/**/*"],
     "/[lang]/guides/[slug]": ["./content/guides/**/*"],
+    // The sitemap is a metadata route → its internal key carries a /route
+    // suffix; the bare "/sitemap.xml" key never matched, so guide posts were
+    // silently missing from the deployed sitemap. Key both to be safe.
     "/sitemap.xml": ["./content/guides/**/*"],
+    "/sitemap.xml/route": ["./content/guides/**/*"],
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
