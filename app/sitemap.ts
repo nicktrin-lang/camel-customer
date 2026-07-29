@@ -1,11 +1,17 @@
 import type { MetadataRoute } from "next";
-import { headers } from "next/headers";
 import { getGuideLangs, listGuides, getAllGuideParams, PRIMARY_GUIDE_LANG } from "@/lib/guides";
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const headerStore = await headers();
-  const host = headerStore.get("host") || "";
-  if (host.includes("test.camel-global.com")) return [];
+// Read guide content at BUILD time and bake the URLs in. A dynamic sitemap can't
+// reach content/guides on Vercel — outputFileTracingIncludes does not apply to
+// metadata routes, so the runtime fs read comes back empty. Static generation
+// reads the repo at build, where the markdown is present.
+export const dynamic = "force-static";
+
+export default function sitemap(): MetadataRoute.Sitemap {
+  // No sitemap off the production deploy (e.g. the staging domain). Replaces the
+  // old request-host check, which forced the route dynamic.
+  if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") return [];
+
   const base = "https://camel-global.com";
   const now  = new Date();
 
