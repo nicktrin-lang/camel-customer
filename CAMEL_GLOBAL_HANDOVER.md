@@ -49,6 +49,18 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
   dynamic) with `process.env.VERCEL_ENV !== 'production'`. **RULE: exactly ONE sitemap file per
   repo, and it must be static.**
 
+- **SEO indexing audit + hardening (2026-07-31, both sites, merged+live).** Confirmed homepage,
+  guides index, and ALL guide articles are indexable + in the sitemap; logged-in/admin areas
+  blocked. Changes: (a) customer canonicals + sitemap + robots `Sitemap:` all standardised on
+  `https://www.camel-global.com` (the served host — apex 308-redirects to www; was a mixed
+  apex/www signal); (b) customer `/checkout/` added to robots.txt Disallow (was the one
+  transactional page left crawlable); (c) `X-Robots-Tag: noindex, nofollow` header (via
+  next.config `headers()`) on internal areas — customer: `/account /bookings /checkout
+  /reset-password`; portal: `/admin /driver` + `/partner/*` EXCEPT signup/terms/privacy (negative-
+  lookahead source keeps those three indexable). robots.txt Disallow remains the primary block;
+  the header is the explicit noindex signal. Root layouts still emit `index,follow` by default —
+  that's correct for public pages; the header overrides it on internal paths.
+
 ## ⚙️ Workflow / infra facts (durable)
 - **Growth Engine auto-merges its own content.** It authenticates with a GitHub token = Nick's
   admin account, which is in the branch-ruleset bypass list, so it opens AND merges its own
