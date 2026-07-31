@@ -37,7 +37,15 @@ const nextConfig: NextConfig = {
     "/sitemap.xml/route": ["./content/guides/**/*"],
   },
   async headers() {
-    return [{ source: "/(.*)", headers: securityHeaders }];
+    return [
+      { source: "/(.*)", headers: securityHeaders },
+      // Explicit noindex for logged-in / transactional areas (belt-and-suspenders
+      // alongside the robots.txt Disallow — keeps these out of search).
+      {
+        source: "/(account|bookings|checkout|reset-password)/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
+    ];
   },
 };
 

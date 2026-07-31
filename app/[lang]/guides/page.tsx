@@ -19,7 +19,7 @@ export function generateStaticParams() {
   return getGuideLangs().map((lang) => ({ lang }));
 }
 
-const SITE = "https://camel-global.com";
+const SITE = "https://www.camel-global.com";
 
 function fmtDate(iso: string, lang: string): string {
   if (!iso) return "";

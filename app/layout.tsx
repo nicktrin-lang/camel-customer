@@ -11,7 +11,7 @@ const font = Plus_Jakarta_Sans({
   display: "swap",
 });
 
-const BASE_URL = "https://camel-global.com";
+const BASE_URL = "https://www.camel-global.com";
 
 export async function generateMetadata(): Promise<Metadata> {
   const headerStore = await headers();

@@ -12,7 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // old request-host check, which forced the route dynamic.
   if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") return [];
 
-  const base = "https://camel-global.com";
+  const base = "https://www.camel-global.com";
   const now  = new Date();
 
   const core: MetadataRoute.Sitemap = [

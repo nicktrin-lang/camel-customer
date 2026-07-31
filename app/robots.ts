@@ -20,9 +20,9 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/bookings/", "/account/", "/reset-password/", "/api/"],
+        disallow: ["/bookings/", "/account/", "/checkout/", "/reset-password/", "/api/"],
       },
     ],
-    sitemap: "https://camel-global.com/sitemap.xml",
+    sitemap: "https://www.camel-global.com/sitemap.xml",
   };
 }
