@@ -11,7 +11,7 @@ export function generateStaticParams() {
   return getAllGuideParams();
 }
 
-const SITE = "https://camel-global.com";
+const SITE = "https://www.camel-global.com";
 
 function fmtDate(iso: string, lang: string): string {
   if (!iso) return "";
