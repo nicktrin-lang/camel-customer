@@ -12,6 +12,7 @@ import {
   PRIMARY_GUIDE_LANG,
 } from "@/lib/guides";
 import { GuidesHero } from "@/app/components/GuidesText";
+import GuidePostList from "@/app/components/GuidePostList";
 
 export const dynamicParams = true;
 
@@ -82,7 +83,7 @@ export default async function GuidesIndex({
 
       {/* Country sidebar (left) + posts (right) */}
       <section className="w-full bg-white px-6 py-12 sm:py-16">
-        <div className="mx-auto flex max-w-5xl flex-col gap-8 md:flex-row md:gap-12">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
           {/* Country nav — a link per country that holds posts */}
           <aside className="shrink-0 md:w-56">
             <p className="mb-3 text-xs font-black uppercase tracking-widest text-black/40">
@@ -114,35 +115,19 @@ export default async function GuidesIndex({
             )}
           </aside>
 
-          {/* Post list for the selected country */}
-          <div className="flex-1">
+          {/* Post list for the selected country — paginated with "Show more" */}
+          <div className="min-w-0 flex-1">
             {posts.length === 0 ? (
               <p className="text-lg font-semibold text-black/60">No guides yet — check back soon.</p>
             ) : (
-              <ul className="divide-y divide-black/10">
-                {posts.map((g) => (
-                  <li key={`${g.lang}/${g.slug}`} className="py-7 first:pt-0">
-                    <Link href={`/${g.lang}/guides/${g.slug}`} className="group block">
-                      {g.date && (
-                        <p className="mb-2 text-xs font-black uppercase tracking-widest text-[#ff7a00]">
-                          {fmtDate(g.date, g.lang)}
-                        </p>
-                      )}
-                      <h2 className="text-2xl font-black leading-snug text-black transition-colors group-hover:text-[#ff7a00] md:text-3xl">
-                        {g.title}
-                      </h2>
-                      {g.description && (
-                        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-black/60">
-                          {g.description}
-                        </p>
-                      )}
-                      <span className="mt-3 inline-block text-sm font-black uppercase tracking-widest text-black transition-colors group-hover:text-[#ff7a00]">
-                        Read guide →
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <GuidePostList
+                posts={posts.map((g) => ({
+                  href: `/${g.lang}/guides/${g.slug}`,
+                  title: g.title,
+                  description: g.description,
+                  dateLabel: g.date ? fmtDate(g.date, g.lang) : undefined,
+                }))}
+              />
             )}
           </div>
         </div>
