@@ -48,7 +48,29 @@ The portal's `lib/portal/stripeGlobalPayouts.ts` is merged and wired in, but **h
 against Stripe** — its v2 call shapes were written from docs. `scripts/verify-global-payouts-sandbox.ts`
 (committed this session) is the sandbox-only harness that proves them; it moves no money.
 
-## 🔐 hCaptcha → Cloudflare Turnstile (BOTH repos)
+## 🔐 hCaptcha → Cloudflare Turnstile (BOTH repos) — ✅ LIVE AND CONFIRMED WORKING
+**Confirmed on the live site by Nick, 2026-08-12**, after the render-loop fix below.
+
+### 🐛 The render loop that broke login/signup — DO NOT REINTRODUCE
+The first Turnstile deploy made auth unusable: solving "verify you are human" instantly re-asked,
+forever. Cause was `app/components/Turnstile.tsx`, not Cloudflare or config.
+
+Callers pass inline arrows (`onExpire={() => setToken("")}`), so the prop gets a new identity every
+render. The effect depended on it, re-ran every render, and its cleanup destroyed the widget **and
+reset `widgetId`** — so solving the challenge destroyed the solved widget and rendered a fresh
+unsolved one, forever. The old hCaptcha component had the same dependency array but its cleanup
+left `widgetId` set, so the early-return guard preserved the widget; it leaked instead of looping.
+
+**Fix (shipped):** callbacks in refs, render effect given an **empty dependency array**; unmount
+cleanup kept; `key`-based resets still work.
+
+**⚠️ Never add `onVerify`/`onExpire` back to that dependency array** for an `exhaustive-deps` lint
+rule — the empty array is load-bearing and commented in the file. The component is byte-identical
+in both repos: fix both or neither.
+
+**Verification lesson:** every static check passed while login was broken (CSP, bundle, site key,
+callbacks). A re-render loop only exists on interaction — drive the real widget, or ask Nick to.
+
 Swapped everywhere captcha appeared, in this repo and the portal. Turnstile is normally
 non-interactive — no more puzzles.
 
@@ -141,10 +163,14 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
     ```
     ~/.claude/settings.json → {"permissions": {"allow": ["Bash(gh pr merge:*)"]}}
     ```
-  - **Prefer `--auto` over a bare `--admin` merge** where repo settings allow it
-    (`gh pr merge <n> --auto --squash --delete-branch`): it merges the instant checks go green, so
-    a PR cannot sit open long enough for someone to push more work onto it — the exact failure that
-    dropped the Turnstile migration on 2026-08-12.
+  - **`--admin` is the working merge. `--auto` does NOT fire here — tested 2026-08-12.**
+    Nick enabled "Allow auto-merge" on both repos and `--auto` arms correctly, but the PR parks:
+    `mergeStateStatus: BLOCKED`, `reviewDecision: REVIEW_REQUIRED`. The `main` ruleset requires an
+    approving review, auto-merge waits for **every** requirement including reviews, and Claude
+    cannot approve its own PR. **Use `gh pr merge <n> --admin --squash --delete-branch`.**
+    Making `--auto` work would mean dropping the required-review rule from the ruleset — a real
+    loosening of branch protection, and Nick's call. Until then `--auto` silently does nothing,
+    which is worse than not using it: the PR looks handled and isn't.
 - **Vercel "Ignored Build Step" (both projects, current — Nick, 2026-07-29):**
   `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` — builds production, SKIPS previews
   (canceled ~2s) to kill the Preview+Production double-build. This REPLACED the portal's old
