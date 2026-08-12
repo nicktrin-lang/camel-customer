@@ -22,7 +22,34 @@ Working Rules
 - camel-coming-soon is a submodule and always shows modified — ignore it, never `git add` it;
   always `git add <specific-file>`, never `git add .`.
 ═══════════════════════════════════════════════════════════════════════════════
-LATEST SESSION — 2026-07-29  (read this first)
+LATEST SESSION — 2026-08-12  (read this first)
+═══════════════════════════════════════════════════════════════════════════════
+Repo hygiene + doc truth-up: the AU/NZ branch was merged all along and the docs said otherwise
+
+## 🧭 State of the repos (verified, not assumed)
+- Both repos pulled to `origin/main` and clean: customer `cb2b119`, portal `e6b1d5d`. The 25
+  customer / 28 portal commits that had accumulated since 2026-08-01 are **100% Growth Engine
+  guide content** — `git diff --stat` excluding `content/guides` is empty in both. No code moved.
+- **The portal working tree had been sitting on `claude/onboarding-country-aunz-9bc42f`, 10
+  commits behind `main`** — a branch that was already fully merged (PR #5). Any session resuming
+  there would have been editing stale, already-merged code. Both repos are now on `main`.
+  **Start every session with `git status` + `git pull`.**
+
+## ✅ Corrected this session (portal docs described shipped code as unbuilt)
+The AU/NZ Global Payouts rail (Units 1–6) has been on portal `main` since PR #5, but the portal
+`CLAUDE.md` and both handovers still called it unbuilt/unmerged. Corrected against actual source.
+**Customer-repo impact: none** — `camel-customer/CLAUDE.md` was re-checked and is accurate. The
+charge path genuinely has no corridor fork: `create-intent` charges every rail identically to the
+platform balance. The AU/NZ difference is confined to the portal's month-end payout call.
+Full detail in `~/camel-portal/CAMEL_GLOBAL_HANDOVER.md`.
+
+## ⚠️ Merged ≠ verified
+The portal's `lib/portal/stripeGlobalPayouts.ts` is merged and wired in, but **has never run
+against Stripe** — its v2 call shapes were written from docs. `scripts/verify-global-payouts-sandbox.ts`
+(committed this session) is the sandbox-only harness that proves them; it moves no money.
+
+═══════════════════════════════════════════════════════════════════════════════
+PREVIOUS SESSION — 2026-07-29
 ═══════════════════════════════════════════════════════════════════════════════
 Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost · Stripe AU/NZ confirms
 
@@ -84,8 +111,12 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
   merely per-connected-account settlement; (2) open a Wise UK account with UK sort code/account
   DENOMINATED IN AUD (not Australian BSB) — confirmed correct; (3) sandbox Global Payouts is
   ENABLED on `acct_1TwWcWG5yRPYnAl6`. Then dev-test `lib/portal/stripeGlobalPayouts.ts` (portal
-  repo, still "written from docs, unverified") against the sandbox. AU/NZ code (Units 1-6) lives
-  on portal branch `claude/onboarding-country-aunz-9bc42f`, not merged.
+  repo, still "written from docs, unverified") against the sandbox — use the portal's
+  `scripts/verify-global-payouts-sandbox.ts`.
+  *(Corrected 2026-08-12: this line used to end "AU/NZ code (Units 1-6) lives on portal branch
+  `claude/onboarding-country-aunz-9bc42f`, not merged." That branch WAS merged via PR #5. The code
+  is on portal `main`; what remains outstanding is the dashboard setup and sandbox verification,
+  not the build.)*
 - **Growth Engine country/language** is set per project via its Target Countries setting in the
   Growth Engine app (`~/growth-engine`, a SEPARATE repo). Nick manages this himself (had the wrong
   country set once → an English UK post landed in the ES portal). Not a Camel-side concern.
