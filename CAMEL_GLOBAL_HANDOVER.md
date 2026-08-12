@@ -48,9 +48,12 @@ The portal's `lib/portal/stripeGlobalPayouts.ts` is merged and wired in, but **h
 against Stripe** — its v2 call shapes were written from docs. `scripts/verify-global-payouts-sandbox.ts`
 (committed this session) is the sandbox-only harness that proves them; it moves no money.
 
-## 🔐 hCaptcha → Cloudflare Turnstile (BOTH repos) — ⚠️ DO NOT MERGE BEFORE THE ENV VARS EXIST
+## 🔐 hCaptcha → Cloudflare Turnstile (BOTH repos)
 Swapped everywhere captcha appeared, in this repo and the portal. Turnstile is normally
 non-interactive — no more puzzles.
+
+**Env vars: DONE** — added to both Vercel projects on 2026-08-12, before the code merged. The old
+`*_HCAPTCHA_*` vars stay until the live CSP shows `challenges.cloudflare.com`, then delete them.
 
 **Deliberately a drop-in.** `app/components/Turnstile.tsx` keeps the old component's exact props
 (`onVerify` / `onExpire`, `""` meaning no-token), so call sites changed by only their import and
@@ -64,13 +67,23 @@ This repo specifically: `app/contact`, `app/login`, `app/signup`, `app/test-book
 `contact.hcaptcha` → `contact.turnstile`. Key counts unchanged (461), translations still differ
 from EN. `HCaptcha.tsx` + `lib/hcaptcha.ts` deleted. `npx tsc --noEmit` clean.
 
-**🚨 Deploy order matters — this fails CLOSED.** With no site key the widget renders nothing, no
-token is produced, and every protected form (login, signup, forgot-password, contact) rejects the
-submit. Set `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` on **both** Vercel projects
-(production + preview) BEFORE merging. Register every form-serving host on the Cloudflare widget:
+**This fails CLOSED.** With no site key the widget renders nothing, no token is produced, and every
+protected form (login, signup, forgot-password, contact) rejects the submit — which is why the env
+vars had to exist before the code merged. Hosts registered on the Cloudflare widget:
 `camel-global.com`, `www.camel-global.com`, `test.camel-global.com`, `portal.camel-global.com`,
-`test-portal.camel-global.com`. Full detail in `~/camel-portal/CAMEL_GLOBAL_HANDOVER.md`.
+`test-portal.camel-global.com`. Mode **Managed**.
 
+### ⚠️ INCIDENT — a squash merge silently dropped this work (read before batching PRs)
+PRs #67/#63 were opened at 12:45 with docs commits only and merged at 13:24. The Turnstile commits
+were pushed to the **same branches** at 13:35 — 11 minutes after the merge. A squash merge takes
+the branch as it stands at merge time, so Turnstile never landed while both live sites kept serving
+hCaptcha. The already-merged PRs were then retitled via `gh pr edit` to claim they carried
+Turnstile, which GitHub permits — so the PR read as shipped while its merged commit had none of it.
+
+**Rules:** never push new work onto a PR awaiting merge (open a second PR); never edit a merged
+PR's title; verify the artefact, not the status — `git merge-base --is-ancestor <tip> main`,
+`git ls-tree main | grep <newfile>`, `curl -sI <domain> | grep -i content-security-policy`.
+Re-landed as customer #68 / portal #64. Full detail in `~/camel-portal/CAMEL_GLOBAL_HANDOVER.md`.
 ═══════════════════════════════════════════════════════════════════════════════
 PREVIOUS SESSION — 2026-07-29
 ═══════════════════════════════════════════════════════════════════════════════
