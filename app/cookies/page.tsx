@@ -104,7 +104,7 @@ export default function CookiesPage() {
             <h2 className="text-2xl font-black text-black mb-3">Third-party cookies</h2>
             <p className="text-base font-semibold">
               Some features on this site use third-party services that may set their own cookies —
-              including Google Maps (for location features) and hCaptcha (for bot prevention on
+              including Google Maps (for location features) and Cloudflare Turnstile (for bot prevention on
               sign-in forms). These services have their own privacy and cookie policies which we
               encourage you to review directly with those providers.
             </p>
