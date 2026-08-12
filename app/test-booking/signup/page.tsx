@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
-import HCaptcha from "@/app/components/HCaptcha";
+import Turnstile from "@/app/components/Turnstile";
 
 export default function TestBookingSignupPage() {
   const supabase = useMemo(() => createCustomerBrowserClient(), []);
@@ -123,7 +123,7 @@ export default function TestBookingSignupPage() {
               className="mt-2 w-full rounded-2xl border border-black/10 px-4 py-4 outline-none focus:border-[#0f4f8a]"
               required />
           </div>
-          <HCaptcha key={captchaKey} onVerify={handleCaptcha} onExpire={() => setCaptchaToken("")} />
+          <Turnstile key={captchaKey} onVerify={handleCaptcha} onExpire={() => setCaptchaToken("")} />
           <button type="submit" disabled={loading}
             className="rounded-full bg-[#ff7a00] px-6 py-3 font-semibold text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)] hover:opacity-95 disabled:opacity-60">
             {loading ? "Creating..." : "Create Customer Account"}

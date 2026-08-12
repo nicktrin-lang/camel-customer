@@ -415,7 +415,7 @@
   "contact.message.placeholder": "Ci dica come possiamo aiutarla…",
   "contact.sent.title": "Messaggio inviato",
   "contact.sendAnother": "Invia un altro messaggio",
-  "contact.hcaptcha": "Questo sito è protetto da hCaptcha.",
+  "contact.turnstile": "Questo sito è protetto da Cloudflare Turnstile.",
   "contact.error.allFields": "Si prega di compilare tutti i campi.",
   "contact.error.captcha": "Si prega di completare il CAPTCHA.",
   "contact.name": "Il suo nome",

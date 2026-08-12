@@ -5,7 +5,7 @@ import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { createCustomerAuthSupabaseClient } from "@/lib/supabase/auth-client";
-import HCaptcha from "@/app/components/HCaptcha";
+import Turnstile from "@/app/components/Turnstile";
 
 async function verifyCaptcha(token: string): Promise<boolean> {
   const res = await fetch("/api/auth/verify-captcha", {
@@ -122,7 +122,7 @@ function LoginForm() {
                 <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                   className="mt-2 w-full rounded-2xl border border-black/10 px-4 py-4 outline-none focus:border-[#0f4f8a]" />
               </div>
-              <HCaptcha key={loginKey} onVerify={handleLoginToken} onExpire={() => setLoginToken("")} />
+              <Turnstile key={loginKey} onVerify={handleLoginToken} onExpire={() => setLoginToken("")} />
               <button type="submit" disabled={loading}
                 className="rounded-full bg-[#ff7a00] px-6 py-3 font-semibold text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)] hover:opacity-95 disabled:opacity-60">
                 {loading ? "Signing in..." : "Log In"}
@@ -159,7 +159,7 @@ function LoginForm() {
                       className="mt-2 w-full rounded-2xl border border-black/10 px-4 py-4 outline-none focus:border-[#0f4f8a]"
                       placeholder="your@email.com" />
                   </div>
-                  <HCaptcha key={forgotKey} onVerify={handleForgotToken} onExpire={() => setForgotToken("")} />
+                  <Turnstile key={forgotKey} onVerify={handleForgotToken} onExpire={() => setForgotToken("")} />
                   <button type="submit" disabled={resetLoading}
                     className="rounded-full bg-[#ff7a00] px-6 py-3 font-semibold text-white shadow-[0_8px_18px_rgba(0,0,0,0.18)] hover:opacity-95 disabled:opacity-60">
                     {resetLoading ? "Sending..." : "Send reset link"}

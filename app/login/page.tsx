@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
-import HCaptcha from "@/app/components/HCaptcha";
+import Turnstile from "@/app/components/Turnstile";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
 async function verifyCaptcha(token: string): Promise<boolean> {
@@ -131,7 +131,7 @@ function LoginForm() {
                     <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                       placeholder="••••••••" className={inputCls} />
                   </div>
-                  <HCaptcha key={loginKey} onVerify={handleLoginToken} onExpire={() => setLoginToken("")} />
+                  <Turnstile key={loginKey} onVerify={handleLoginToken} onExpire={() => setLoginToken("")} />
                   <button type="submit" disabled={loading}
                     className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
                     {loading ? t("common.loading") : t("login.submit") + " →"}
@@ -174,7 +174,7 @@ function LoginForm() {
                         <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                           placeholder={t("login.emailPlaceholder")} className={inputCls} />
                       </div>
-                      <HCaptcha key={forgotKey} onVerify={handleForgotToken} onExpire={() => setForgotToken("")} />
+                      <Turnstile key={forgotKey} onVerify={handleForgotToken} onExpire={() => setForgotToken("")} />
                       <button type="submit" disabled={resetLoading}
                         className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
                         {resetLoading ? t("common.loading") : t("reset.submit") + " →"}

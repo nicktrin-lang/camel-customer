@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyHCaptcha } from "@/lib/hcaptcha";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, getIp } from "@/lib/rateLimit";
 import { coerceLocale, Locale } from "@/lib/email";
 
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "CAPTCHA token is required." }, { status: 400 });
   }
 
-  const captchaOk = await verifyHCaptcha(captchaToken);
+  const captchaOk = await verifyTurnstile(captchaToken, ip);
   if (!captchaOk) {
     return NextResponse.json({ error: "CAPTCHA verification failed. Please try again." }, { status: 400 });
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyHCaptcha } from "@/lib/hcaptcha";
+import { verifyTurnstile } from "@/lib/turnstile";
 import { rateLimit, getIp } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing captcha token." }, { status: 400 });
   }
 
-  const valid = await verifyHCaptcha(token);
+  const valid = await verifyTurnstile(token, ip);
   if (!valid) {
     return NextResponse.json({ error: "Captcha verification failed. Please try again." }, { status: 400 });
   }

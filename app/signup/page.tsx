@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
-import HCaptcha from "@/app/components/HCaptcha";
+import Turnstile from "@/app/components/Turnstile";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 
@@ -164,7 +164,7 @@ function SignupForm() {
                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
                   className={inputCls} placeholder="Min. 8 characters" />
               </div>
-              <HCaptcha key={captchaKey} onVerify={handleCaptcha} onExpire={() => setCaptchaToken("")} />
+              <Turnstile key={captchaKey} onVerify={handleCaptcha} onExpire={() => setCaptchaToken("")} />
               <button type="submit" disabled={loading}
                 className="w-full bg-[#ff7a00] py-5 text-base font-black text-white hover:opacity-90 disabled:opacity-60 transition-opacity">
                 {loading ? t("common.loading") : t("signup.submit") + " →"}
