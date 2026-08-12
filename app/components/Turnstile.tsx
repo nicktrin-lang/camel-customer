@@ -59,6 +59,25 @@ export default function Turnstile({ onVerify, onExpire }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
 
+  // The callbacks live in refs, and the render effect below has EMPTY deps, so
+  // it runs once per mount. This pairing is load-bearing, not style:
+  //
+  // Callers pass inline arrows (`onExpire={() => setToken("")}`), so the props
+  // get a new identity on every render. If the effect depended on them it would
+  // re-run constantly, and because its cleanup destroys the widget and clears
+  // widgetId, each re-run would replace a solved widget with a fresh unsolved
+  // one. Solving it calls back into setState, which re-renders, which destroys
+  // it again — "verify you are human" forever. That shipped and broke login.
+  //
+  // Refs keep the callbacks current without making them dependencies. Do not
+  // add onVerify/onExpire to the dep array to satisfy a lint rule.
+  const onVerifyRef = useRef(onVerify);
+  const onExpireRef = useRef(onExpire);
+  useEffect(() => {
+    onVerifyRef.current = onVerify;
+    onExpireRef.current = onExpire;
+  });
+
   useEffect(() => {
     let mounted = true;
 
@@ -68,30 +87,30 @@ export default function Turnstile({ onVerify, onExpire }: Props) {
       if (!sitekey || !window.turnstile) return;
       widgetId.current = window.turnstile.render(containerRef.current, {
         sitekey,
-        callback: onVerify,
+        callback: (token: string) => onVerifyRef.current(token),
         "expired-callback": () => {
-          onExpire?.();
-          onVerify("");
+          onExpireRef.current?.();
+          onVerifyRef.current("");
         },
         // A challenge that errors or times out must not leave a stale token
         // behind — clear it so the form cannot be submitted on a dead check.
-        "error-callback": () => { onVerify(""); },
-        "timeout-callback": () => { onVerify(""); },
+        "error-callback": () => { onVerifyRef.current(""); },
+        "timeout-callback": () => { onVerifyRef.current(""); },
       });
     }
 
     loadTurnstileScript(render);
 
+    // Runs only on real unmount now. Callers force a reset by changing `key`,
+    // which remounts the component and so still gets a clean widget.
     return () => {
       mounted = false;
-      // hCaptcha's version leaked a widget per mount. Turnstile exposes remove(),
-      // so tear it down — these forms mount/unmount as users switch tabs.
       if (widgetId.current !== null && window.turnstile) {
         try { window.turnstile.remove(widgetId.current); } catch { /* already gone */ }
         widgetId.current = null;
       }
     };
-  }, [onVerify, onExpire]);
+  }, []);
 
   return <div ref={containerRef} className="mt-2" />;
 }
