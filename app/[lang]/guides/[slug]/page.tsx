@@ -89,6 +89,9 @@ export default async function GuidePost({
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
           <GuideCountryNav lang={lang} selected={guide.country} />
           <div className="min-w-0 flex-1">
+        {guide.jsonld ? (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: guide.jsonld }} />
+        ) : null}
         <div
           className="guide-body"
           dangerouslySetInnerHTML={{ __html: stripLeadingH1(guide.html, guide.title) }}
