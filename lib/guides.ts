@@ -33,6 +33,8 @@ export type GuideFrontmatter = {
   type: string; // article | location | guide
   date: string; // ISO 8601
   canonical: string;
+  /** JSON-LD schema string from the publishing tool, emitted in a hidden <script>. */
+  jsonld?: string;
 };
 
 /** List item — frontmatter + slug, WITHOUT the (potentially large) body. */
@@ -77,6 +79,7 @@ function coerceMeta(data: Record<string, unknown>, fallbackSlug: string): GuideM
     type: String(data.type ?? "article"),
     date: String(data.date ?? ""),
     canonical: String(data.canonical ?? ""),
+    ...(data.jsonld ? { jsonld: String(data.jsonld) } : {}),
   };
 }
 
