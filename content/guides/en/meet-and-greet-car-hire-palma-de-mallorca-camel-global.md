@@ -1,6 +1,6 @@
 ---
 title: "Meet and Greet Car Hire Palma de Mallorca | Camel Global"
-description: "Compare local car hire firms at Palma de Mallorca Airport with Camel Global. Skip the rental desk — your car is delivered straight to you."
+description: "Compare local car hire firms at Palma de Mallorca Airport with Camel Global. Skip the rental desk - your car is delivered straight to you."
 slug: "meet-and-greet-car-hire-palma-de-mallorca-camel-global"
 language: "en"
 country: "GB"
@@ -11,15 +11,15 @@ canonical: "https://www.camel-global.com/en/guides/meet-and-greet-car-hire-palma
 
 # Meet and Greet Car Hire Palma de Mallorca: Skip the Rental Desk with Camel Global
 
-Anyone who has flown into Palma de Mallorca on a packed summer charter from Manchester, Gatwick, Stansted or Bristol knows the drill: you land, you queue at passport control, you collect your bags, and then you join another queue — this time at a car hire desk — before you've even left the terminal. Meet and greet car hire Palma de Mallorca flips that routine on its head. Instead of trekking to a depot or standing behind a counter, your car is brought to you, and you compare local Spanish operators through Camel Global before you even board your flight from the UK.
+Anyone who has flown into Palma de Mallorca on a packed summer charter from Manchester, Gatwick, Stansted or Bristol knows the drill: you land, you queue at passport control, you collect your bags, and then you join another queue - this time at a car hire desk - before you've even left the terminal. Meet and greet car hire Palma de Mallorca flips that routine on its head. Instead of trekking to a depot or standing behind a counter, your car is brought to you, and you compare local Spanish operators through Camel Global before you even board your flight from the UK.
 
 ## What Meet and Greet Car Hire Actually Means at This Airport
 
-Son Sant Joan, Palma's airport, sits around eight kilometres east of the city centre and handles enormous volumes of British holidaymakers throughout the year, particularly between May and October. The traditional car hire experience here involves a shuttle bus or a walk to an off-site compound, followed by paperwork at a counter. With meet and greet, that entire stage disappears. You book your car in advance through the Camel Global platform, choosing between local Mallorcan operators who bid for your custom, and a driver brings the vehicle to a pre-arranged point at the airport — no desk, no queue, no depot transfer.
+Son Sant Joan, Palma's airport, sits around eight kilometres east of the city centre and handles enormous volumes of British holidaymakers throughout the year, particularly between May and October. The traditional car hire experience here involves a shuttle bus or a walk to an off-site compound, followed by paperwork at a counter. With meet and greet, that entire stage disappears. You book your car in advance through the Camel Global platform, choosing between local Mallorcan operators who bid for your custom, and a driver brings the vehicle to a pre-arranged point at the airport - no desk, no queue, no depot transfer.
 
 ## Arriving at Son Sant Joan: What Happens After You Land
 
-Palma's single terminal building is large but well signposted, and most UK arrivals come through the non-Schengen area before passing into the main hall. Baggage reclaim can take anywhere from fifteen minutes to considerably longer during the peak summer rush, when several wide-bodied and charter aircraft can land within the same half-hour window. With a meet and greet booking, that waiting time isn't wasted dead time spent worrying about a rental queue — your car is being brought to you, timed against your actual landing rather than a generic pickup slot. This matters enormously at Palma, where July and August queues at the on-airport hire desks are notoriously long and can eat well over an hour of your holiday before you've left the car park.
+Palma's single terminal building is large but well signposted, and most UK arrivals come through the non-Schengen area before passing into the main hall. Baggage reclaim can take anywhere from fifteen minutes to considerably longer during the peak summer rush, when several wide-bodied and charter aircraft can land within the same half-hour window. With a meet and greet booking, that waiting time isn't wasted dead time spent worrying about a rental queue - your car is being brought to you, timed against your actual landing rather than a generic pickup slot. This matters enormously at Palma, where July and August queues at the on-airport hire desks are notoriously long and can eat well over an hour of your holiday before you've left the car park.
 
 ## Why UK Travellers Are Moving Away from the Airport Desk
 
@@ -27,11 +27,11 @@ Big-brand desks can feel like the safer, more familiar choice, especially if you
 
 ## Getting Around Mallorca Once You're on the Road
 
-Mallorca is a compact island, but distances can be deceptive once you're driving. The Ma-19 and Ma-20 ring roads connect the airport to Palma city centre in around fifteen to twenty minutes outside peak traffic, while routes towards Alcúdia and Pollença in the north take closer to fifty minutes on the Ma-13. Heading west towards Andratx or the Tramuntana mountains, or south-east to Cala d'Or and Porto Cristo, generally means an hour or more behind the wheel, often on narrower coastal roads once you leave the motorway network. Having your hire car delivered directly to the airport, rather than adding an extra depot detour, means you're on those roads sooner — useful if you've booked a villa near Sóller or a hotel in Cala Millor and want to arrive before dark.
+Mallorca is a compact island, but distances can be deceptive once you're driving. The Ma-19 and Ma-20 ring roads connect the airport to Palma city centre in around fifteen to twenty minutes outside peak traffic, while routes towards Alcúdia and Pollença in the north take closer to fifty minutes on the Ma-13. Heading west towards Andratx or the Tramuntana mountains, or south-east to Cala d'Or and Porto Cristo, generally means an hour or more behind the wheel, often on narrower coastal roads once you leave the motorway network. Having your hire car delivered directly to the airport, rather than adding an extra depot detour, means you're on those roads sooner - useful if you've booked a villa near Sóller or a hotel in Cala Millor and want to arrive before dark.
 
 ## Addressing the Trust Question Head-On
 
-It's a fair question: who actually turns up with the keys, and is it safe to pay through a platform you haven't used before? Camel Global is a live platform processing real bookings through Stripe, a payment provider used across UK and European retail, and it operates across multiple currencies with support in six languages, so British travellers aren't dealing with an unfamiliar checkout built for another market. The car itself is supplied by the local operator you've chosen, and that operator issues the paperwork for the hire — Camel Global's role is to let you compare, book and pay securely, with refunds managed through the platform rather than left to chase up abroad. There's no hidden layer of fees sprung on you at the roadside, and the price you see when you book is the price you're working from.
+It's a fair question: who actually turns up with the keys, and is it safe to pay through a platform you haven't used before? Camel Global is a live platform processing real bookings through Stripe, a payment provider used across UK and European retail, and it operates across multiple currencies with support in six languages, so British travellers aren't dealing with an unfamiliar checkout built for another market. The car itself is supplied by the local operator you've chosen, and that operator issues the paperwork for the hire - Camel Global's role is to let you compare, book and pay securely, with refunds managed through the platform rather than left to chase up abroad. There's no hidden layer of fees sprung on you at the roadside, and the price you see when you book is the price you're working from.
 
 ## Booking Before You Fly from the UK
 
@@ -39,4 +39,4 @@ The most sensible approach is to compare and book your Palma de Mallorca car hir
 
 ## Ready When You Land
 
-If you're flying into Son Sant Joan this year and would rather spend your first hour in Mallorca on the road to your hotel than in a queue at a rental desk, compare local operators on Camel Global and arrange for your car to be delivered to the airport. No desk, no queue, no depot bus — just a straightforward start to your Mallorcan holiday.
+If you're flying into Son Sant Joan this year and would rather spend your first hour in Mallorca on the road to your hotel than in a queue at a rental desk, compare local operators on Camel Global and arrange for your car to be delivered to the airport. No desk, no queue, no depot bus - just a straightforward start to your Mallorcan holiday.
