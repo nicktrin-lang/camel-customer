@@ -59,6 +59,27 @@ export default async function GuidePost({
 
   return (
     <article className="w-full">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Article",
+            headline: guide.title,
+            description: guide.description,
+            inLanguage: lang,
+            datePublished: guide.date || undefined,
+            dateModified: guide.date || undefined,
+            mainEntityOfPage: guide.canonical || `${SITE}/${lang}/guides/${slug}`,
+            author: { "@type": "Organization", name: "Camel Global", url: SITE },
+            publisher: {
+              "@type": "Organization",
+              name: "Camel Global",
+              logo: { "@type": "ImageObject", url: `${SITE}/camel-logo.png` },
+            },
+          }),
+        }}
+      />
       {/* Header band */}
       <header className="w-full bg-black px-6 pt-16 pb-12 text-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">

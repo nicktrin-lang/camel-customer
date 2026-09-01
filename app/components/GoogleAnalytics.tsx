@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 declare global {
@@ -14,18 +14,20 @@ declare global {
 // The actual gtag scripts are injected in app/layout.tsx server-side.
 export default function GoogleAnalyticsPageView() {
   const pathname = usePathname();
+  const firstRun = useRef(true);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.gtag) return;
-    // gtag was initialised in layout.tsx — just fire the page view
-    const allIds = (window as any).__GA_IDS__ as string[] | undefined;
-    if (!allIds?.length) return;
-    allIds.forEach(id => {
-      window.gtag!("config", id, {
-        page_path: window.location.pathname + window.location.search,
-        page_title: document.title,
-        page_location: window.location.href,
-      });
+    // The initial page_view is already sent by gtag('config', …, { send_page_view: true })
+    // in layout.tsx, so skip the first run and fire page_view only on SPA navigation.
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    if (typeof window === "undefined" || typeof window.gtag !== "function") return;
+    window.gtag("event", "page_view", {
+      page_path: window.location.pathname + window.location.search,
+      page_title: document.title,
+      page_location: window.location.href,
     });
   }, [pathname]);
 
