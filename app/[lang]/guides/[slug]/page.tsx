@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGuide, relatedGuides, getAllGuideParams, isGuideLang } from "@/lib/guides";
+import { getGuide, relatedGuides, getAllGuideParams, isGuideLang, guidePostAlternates, guideLangsForSlug, GUIDE_LANG_NATIVE } from "@/lib/guides";
 import GuideCountryNav from "@/app/components/GuideCountryNav";
 import { GuidesCta } from "@/app/components/GuidesText";
 
@@ -35,7 +35,7 @@ export async function generateMetadata({
     title: { absolute: guide.title },
     description: guide.description,
     robots: { index: true, follow: true },
-    alternates: { canonical },
+    alternates: { canonical, languages: guidePostAlternates(slug) },
     openGraph: {
       title: guide.title,
       description: guide.description,
@@ -56,6 +56,7 @@ export default async function GuidePost({
   const guide = getGuide(lang, slug);
   if (!guide) notFound();
   const related = relatedGuides(lang, slug, 3);
+  const otherLangs = guideLangsForSlug(slug).filter((l) => l !== lang);
 
   return (
     <article className="w-full">
@@ -89,6 +90,16 @@ export default async function GuidePost({
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
           <GuideCountryNav lang={lang} selected={guide.country} />
           <div className="min-w-0 flex-1">
+        {otherLangs.length > 0 && (
+          <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-black/10 pb-6 text-sm">
+            <span className="font-black uppercase tracking-widest text-black/40">Read in</span>
+            {otherLangs.map((l) => (
+              <a key={l} href={`/${l}/guides/${slug}`} className="font-black text-black/70 transition-colors hover:text-[#ff7a00]">
+                {GUIDE_LANG_NATIVE[l]}
+              </a>
+            ))}
+          </div>
+        )}
         <div
           className="guide-body"
           dangerouslySetInnerHTML={{ __html: stripLeadingH1(guide.html, guide.title) }}
