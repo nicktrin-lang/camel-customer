@@ -4,12 +4,12 @@ import { notFound } from "next/navigation";
 import {
   isGuideLang,
   getGuideLangs,
-  getGuideCountriesForLang,
-  guidesByCountryForLang,
-  listGuides,
+  getGuideCountries,
+  guidesByCountry,
+  listAllGuides,
   countryName,
   GUIDE_LANG_LABEL,
-  guideIndexAlternates,
+  PRIMARY_GUIDE_LANG,
 } from "@/lib/guides";
 import { GuidesHero } from "@/app/components/GuidesText";
 import GuidePostList from "@/app/components/GuidePostList";
@@ -40,13 +40,13 @@ export async function generateMetadata({
   const title = `${label} — Camel Global`;
   const description =
     "Guides and articles on meet & greet car hire across our destinations, from Camel Global.";
-  // Each language index is its own canonical URL, cross-linked by hreflang.
-  const canonical = `${SITE}/${lang}/guides`;
+  // All language variants of the aggregated index consolidate to one canonical.
+  const canonical = `${SITE}/${PRIMARY_GUIDE_LANG}/guides`;
   return {
     title: { absolute: title },
     description,
     robots: { index: true, follow: true },
-    alternates: { canonical, languages: guideIndexAlternates() },
+    alternates: { canonical },
     openGraph: { title, description, url: canonical, type: "website" },
   };
 }
@@ -62,12 +62,12 @@ export default async function GuidesIndex({
   if (!isGuideLang(lang)) notFound();
   const { country } = await searchParams;
 
-  const countries = getGuideCountriesForLang(lang); // countries with posts in THIS language
+  const countries = getGuideCountries(); // countries that actually have posts
   const selected =
     country && countries.some((c) => c.code === country.toUpperCase())
       ? country.toUpperCase()
       : countries[0]?.code ?? null;
-  const posts = selected ? guidesByCountryForLang(lang, selected) : listGuides(lang);
+  const posts = selected ? guidesByCountry(selected) : listAllGuides();
 
   return (
     <div className="w-full">
@@ -122,10 +122,10 @@ export default async function GuidesIndex({
             ) : (
               <GuidePostList
                 posts={posts.map((g) => ({
-                  href: `/${lang}/guides/${g.slug}`,
+                  href: `/${g.lang}/guides/${g.slug}`,
                   title: g.title,
                   description: g.description,
-                  dateLabel: g.date ? fmtDate(g.date, lang) : undefined,
+                  dateLabel: g.date ? fmtDate(g.date, g.lang) : undefined,
                 }))}
               />
             )}
