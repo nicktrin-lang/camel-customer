@@ -60,6 +60,27 @@ export default async function GuidePost({
 
   return (
     <article className="w-full">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Article",
+            headline: guide.title,
+            description: guide.description,
+            inLanguage: lang,
+            datePublished: guide.date || undefined,
+            dateModified: guide.date || undefined,
+            mainEntityOfPage: guide.canonical || `${SITE}/${lang}/guides/${slug}`,
+            author: { "@type": "Organization", name: "Camel Global", url: SITE },
+            publisher: {
+              "@type": "Organization",
+              name: "Camel Global",
+              logo: { "@type": "ImageObject", url: `${SITE}/camel-logo.png` },
+            },
+          }),
+        }}
+      />
       {/* Header band */}
       <header className="w-full bg-black px-6 pt-16 pb-12 text-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
@@ -90,6 +111,9 @@ export default async function GuidePost({
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
           <GuideCountryNav lang={lang} selected={guide.country} />
           <div className="min-w-0 flex-1">
+        {guide.jsonld ? (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: guide.jsonld }} />
+        ) : null}
         {otherLangs.length > 0 && (
           <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-black/10 pb-6 text-sm">
             <span className="font-black uppercase tracking-widest text-black/40">Read in</span>

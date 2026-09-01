@@ -35,6 +35,9 @@ export default function CookieBanner() {
   function reject() {
     localStorage.setItem(STORAGE_KEY, "rejected");
     setVisible(false);
+    if (typeof window !== "undefined" && (window as any).gtag) {
+      (window as any).gtag("consent", "update", { analytics_storage: "denied" });
+    }
   }
 
   if (!visible) return null;

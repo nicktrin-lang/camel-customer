@@ -454,6 +454,7 @@ function CustomerHome() {
               </>
             ) : (
               <>
+                <a href="https://portal.camel-global.com/partner/signup" className="text-sm font-bold text-[#ff7a00] hover:underline">{t("footer.becomePartner")}</a>
                 <Link href="/signup" className="text-sm font-bold text-white hover:underline">{t("nav.signUp")}</Link>
                 <Link href="/login" className="border border-white/30 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/10 transition-colors">{t("common.logIn")}</Link>
               </>
@@ -502,6 +503,9 @@ function CustomerHome() {
                   </>
                 ) : (
                   <>
+                    <a href="https://portal.camel-global.com/partner/signup" className="block px-4 py-3 text-sm font-bold text-[#ff7a00] hover:bg-white/10 transition-colors border-b border-white/10">
+                      {t("footer.becomePartner")}
+                    </a>
                     <Link href="/signup" onClick={() => setBurgerOpen(false)} className="block px-4 py-3 text-sm font-bold text-white hover:bg-white/10 transition-colors border-b border-white/10">
                       {t("nav.signUp")}
                     </Link>
