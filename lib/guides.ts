@@ -37,8 +37,11 @@ export type GuideFrontmatter = {
   jsonld?: string;
 };
 
-/** List item — frontmatter + slug, WITHOUT the (potentially large) body. */
-export type GuideMeta = GuideFrontmatter & { slug: string };
+/** List item — frontmatter + slug, WITHOUT the (potentially large) body.
+ *  `headline` is the article's own H1 (first `# ` line of the body); the guide list and
+ *  the post page both display it, while the concise frontmatter `title` stays on the
+ *  <title> tag / SERP. */
+export type GuideMeta = GuideFrontmatter & { slug: string; headline?: string };
 
 /** Full post — meta plus the rendered HTML body. */
 export type Guide = GuideMeta & { html: string; bodyMarkdown: string };
@@ -87,6 +90,18 @@ function baseSlug(file: string): string {
   return path.basename(file).replace(/\.md$/i, "");
 }
 
+/** The article's headline: the first `# ` heading in the Markdown body (light inline
+ *  syntax stripped). Null if there's no leading H1. */
+function firstMarkdownH1(md: string): string | null {
+  const m = md.match(/^\s*#\s+(.+?)\s*$/m);
+  if (!m) return null;
+  const text = m[1]
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // [text](url) -> text
+    .replace(/[*_`]/g, "")
+    .trim();
+  return text || null;
+}
+
 /** Languages that actually have at least one post on disk. */
 export function getGuideLangs(): GuideLang[] {
   return GUIDE_LANGS.filter((l) => walkMarkdown(langDir(l)).length > 0);
@@ -97,8 +112,10 @@ export function listGuides(lang: string): GuideMeta[] {
   if (!isGuideLang(lang)) return [];
   const metas = walkMarkdown(langDir(lang)).map((file) => {
     const raw = fs.readFileSync(file, "utf8");
-    const { data } = matter(raw);
-    return coerceMeta(data, baseSlug(file));
+    const { data, content } = matter(raw);
+    const meta = coerceMeta(data, baseSlug(file));
+    const headline = firstMarkdownH1(content);
+    return headline ? { ...meta, headline } : meta;
   });
   // De-dupe by slug (last wins) so a stray duplicate can't render twice.
   const bySlug = new Map<string, GuideMeta>();
@@ -116,7 +133,8 @@ export function getGuide(lang: string, slug: string): Guide | null {
     const meta = coerceMeta(data, baseSlug(file));
     if (meta.slug === slug || baseSlug(file) === slug) {
       const html = marked.parse(content, { async: false }) as string;
-      return { ...meta, html, bodyMarkdown: content };
+      const headline = firstMarkdownH1(content) ?? undefined;
+      return { ...meta, headline, html, bodyMarkdown: content };
     }
   }
   return null;

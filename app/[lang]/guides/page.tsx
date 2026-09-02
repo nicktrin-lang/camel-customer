@@ -123,7 +123,7 @@ export default async function GuidesIndex({
               <GuidePostList
                 posts={posts.map((g) => ({
                   href: `/${g.lang}/guides/${g.slug}`,
-                  title: g.title,
+                  title: g.headline || g.title, // the article headline (matches the post page); SEO title stays on <title>
                   description: g.description,
                   dateLabel: g.date ? fmtDate(g.date, g.lang) : undefined,
                 }))}
