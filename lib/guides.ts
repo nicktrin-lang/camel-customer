@@ -164,6 +164,33 @@ export function listAllGuides(): GuideListItem[] {
 
 export type GuideCountry = { code: string; count: number };
 
+/** One hub = one language folder. NOTE this differs from the portal, where language and
+ *  country are 1:1 and /<lang>/guides IS a country hub. Here `country` is the READER's
+ *  home market, not the subject: the 49 posts tagged GB are about Benidorm, Lanzarote and
+ *  Vigo, written in English for UK travellers, and the AU ones are English too. So English
+ *  spans two countries and the language is what actually separates the hubs. `countries`
+ *  records which markets a hub covers, for reporting — it is not a URL axis. */
+export type GuideMarket = { lang: GuideLang; countries: string[]; count: number };
+
+/** Every language folder that has posts. */
+export function getGuideMarkets(): GuideMarket[] {
+  const out: GuideMarket[] = [];
+  for (const lang of GUIDE_LANGS) {
+    const posts = listGuides(lang);
+    if (!posts.length) continue;
+    const countries = [...new Set(posts.map((p) => (p.country || "").toUpperCase()).filter(Boolean))].sort();
+    out.push({ lang, countries, count: posts.length });
+  }
+  return out.sort((a, b) => b.count - a.count);
+}
+
+/** Which language folder holds a country's guides — drives the ?country= redirect.
+ *  A country maps to exactly one language here even though a language spans countries. */
+export function langForCountry(country: string): GuideLang | null {
+  const code = (country || "").toUpperCase();
+  return getGuideMarkets().find((m) => m.countries.includes(code))?.lang ?? null;
+}
+
 /** Distinct countries that have posts (from the `country` frontmatter), with
  *  counts — drives the country sidebar. */
 export function getGuideCountries(): GuideCountry[] {
