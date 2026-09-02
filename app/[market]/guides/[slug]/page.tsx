@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGuide, relatedGuides, getAllGuideParams, isGuideMarket, MARKET_LANG, marketCountry } from "@/lib/guides";
+import { getGuide, relatedGuides, getAllGuideParams, isGuideMarket, marketLanguage, marketCountry } from "@/lib/guides";
 import GuideCountryNav from "@/app/components/GuideCountryNav";
 import { GuidesCta } from "@/app/components/GuidesText";
 
@@ -46,7 +46,7 @@ export async function generateMetadata({
       description: guide.description,
       url: canonical,
       type: "article",
-      locale: isGuideMarket(market) ? MARKET_LANG[market] : undefined,
+      locale: marketLanguage(market),
     },
   };
 }
@@ -77,7 +77,7 @@ export default async function GuidePost({
             "@type": "Article",
             headline: displayTitle,
             description: guide.description,
-            inLanguage: isGuideMarket(market) ? MARKET_LANG[market] : "en",
+            inLanguage: marketLanguage(market),
             datePublished: guide.date || undefined,
             dateModified: guide.date || undefined,
             mainEntityOfPage: `${SITE}/${market}/guides/${slug}`,
@@ -104,7 +104,7 @@ export default async function GuidePost({
             </Link>
             {guide.date && (
               <p className="mb-3 text-xs font-black uppercase tracking-widest text-white/50">
-                {fmtDate(guide.date, isGuideMarket(market) ? MARKET_LANG[market] : "en")}
+                {fmtDate(guide.date, marketLanguage(market))}
               </p>
             )}
             {/* The article's full headline (the body's H1), shown as the page H1.
