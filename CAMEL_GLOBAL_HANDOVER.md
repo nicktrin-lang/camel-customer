@@ -247,11 +247,30 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
     Making `--auto` work would mean dropping the required-review rule from the ruleset — a real
     loosening of branch protection, and Nick's call. Until then `--auto` silently does nothing,
     which is worse than not using it: the PR looks handled and isn't.
-- **Vercel "Ignored Build Step" (both projects, current — Nick, 2026-07-29):**
-  `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` — builds production, SKIPS previews
-  (canceled ~2s) to kill the Preview+Production double-build. This REPLACED the portal's old
-  git-diff content check (which had once canceled guide-only deploys by not watching `./content`).
-  Production now always builds → never skips a post.
+- **Vercel "Ignored Build Step" — `Only build production` on both projects (Nick, 2026-09-02).**
+  Settings → **Build and Deployment** → Ignored Build Step → Behavior. Vercel now offers this as
+  a native dropdown option, so no custom command is needed; the greyed Command box just shows the
+  equivalent it runs: `if [ "$VERCEL_ENV" == "production" ]; then exit 1; else exit 0; fi`.
+  **Exit 1 = BUILD, exit 0 = SKIP** — the inverse of what you would guess.
+  - ⚠️ **CORRECTION — the previous note here was wrong.** It claimed the bash script
+    `[ "$VERCEL_ENV" = "production" ] && exit 1 || exit 0` had been configured on both projects
+    since 2026-07-29. On 2026-09-02 the Behavior was found sitting on **`Automatic`** on the
+    portal project, i.e. **every push to a PR branch had been building a preview all along** and
+    doubling build spend. It was set properly on both projects that day. Vercel settings are not
+    in the repo and nothing tests them — **check the dashboard before trusting this line.**
+  - Consequence: **no preview URL on any PR.** That matches the workflow (merge with `--admin`,
+    verify on production) and is part of why `--auto` merge parks forever. Do NOT "fix" a missing
+    preview by flipping this back to Automatic.
+  - The older portal-only git-diff content check (which once canceled guide-only deploys by not
+    watching `./content`) is long gone. Production always builds → never skips a post.
+- **One Vercel project per repo — verified in the dashboard 2026-09-02.** `camel-portal-live` →
+  portal.camel-global.com ← `nicktrin-lang/camel-portal`; `camel-customer-live` →
+  www.camel-global.com ← `nicktrin-lang/camel-customer`. No second project on either repo, so
+  there is no duplicate-project double-build. Worth knowing as a failure mode though: two Vercel
+  projects on one repo build twice on every production push, and the Ignored Build Step CANNOT
+  stop it, because both runs are `VERCEL_ENV=production`. (`nicktrin-lang/trackfinder` currently
+  has exactly that — `trackfinder` and `trackfinder-16a7` — a different product, but the shape to
+  watch for.)
 
 ## ⏳ PENDING (Nick's actions — not done yet)
 - **Stripe AU/NZ (recorded in `~/camel-portal/STRIPE_REWRITE_DESIGN.md`, Anannya 2026-07-29):**
