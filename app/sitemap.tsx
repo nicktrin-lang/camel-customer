@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getGuideLangs, listGuides, getAllGuideParams, PRIMARY_GUIDE_LANG } from "@/lib/guides";
+import { listGuides, getAllGuideParams, getGuideMarkets } from "@/lib/guides";
 
 // Static: read guide content at BUILD time and bake the URLs in. A dynamic
 // metadata route can't reach content/guides on Vercel (outputFileTracingIncludes
@@ -25,17 +25,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/cookies`, lastModified: now, changeFrequency: "monthly", priority: 0.3 },
   ];
 
-  // ONE canonical guides index (all language variants consolidate to it), plus
-  // every /<lang>/guides/<slug> post.
-  const guideIndexes: MetadataRoute.Sitemap =
-    getGuideLangs().length > 0
-      ? [{
-          url: `${base}/${PRIMARY_GUIDE_LANG}/guides`,
-          lastModified: now,
-          changeFrequency: "weekly",
-          priority: 0.7,
-        }]
-      : [];
+  // One indexable hub PER LANGUAGE — /<lang>/guides canonicalises to itself. It used to
+  // list a single aggregated index that every variant consolidated into, which left the
+  // hub showing whichever country sorted first (Australia, 2 posts) while the other 49
+  // were reachable only via ?country=GB.
+  const guideIndexes: MetadataRoute.Sitemap = getGuideMarkets().map(({ lang }) => ({
+    url: `${base}/${lang}/guides`,
+    lastModified: now,
+    changeFrequency: "weekly" as const,
+    priority: 0.7,
+  }));
   const guidePosts: MetadataRoute.Sitemap = getAllGuideParams().map(({ lang, slug }) => {
     const meta = listGuides(lang).find((g) => g.slug === slug);
     const lastModified = meta?.date ? new Date(meta.date) : now;

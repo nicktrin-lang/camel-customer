@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import {
   isGuideLang,
   getGuideLangs,
-  getGuideCountries,
-  guidesByCountry,
-  listAllGuides,
-  countryName,
+  listGuides,
+  getGuideMarkets,
+  langForCountry,
   GUIDE_LANG_LABEL,
+  GUIDE_LANG_NATIVE,
   PRIMARY_GUIDE_LANG,
 } from "@/lib/guides";
 import { GuidesHero } from "@/app/components/GuidesText";
@@ -36,12 +36,21 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { lang } = await params;
   if (!isGuideLang(lang)) return {};
+  if (!getGuideMarkets().some((m) => m.lang === lang)) return {};
   const label = GUIDE_LANG_LABEL[lang];
-  const title = `${label} — Camel Global`;
+  // Disambiguate the non-primary hubs: GUIDE_LANG_LABEL is "Guides" for BOTH en and fr,
+  // and two indexable pages must not share a title.
+  const title =
+    lang === PRIMARY_GUIDE_LANG
+      ? `${label} — Camel Global`
+      : `${label} (${GUIDE_LANG_NATIVE[lang]}) — Camel Global`;
   const description =
     "Guides and articles on meet & greet car hire across our destinations, from Camel Global.";
-  // All language variants of the aggregated index consolidate to one canonical.
-  const canonical = `${SITE}/${PRIMARY_GUIDE_LANG}/guides`;
+  // Self-canonical: each language hub is the one indexable URL for its own posts. It used
+  // to point every variant at the primary lang, which — combined with the country filter
+  // below defaulting to countries[0] — meant the whole section canonicalised into a page
+  // showing 2 Australian guides while the other 49 sat on ?country=GB.
+  const canonical = `${SITE}/${lang}/guides`;
   return {
     title: { absolute: title },
     description,
@@ -62,12 +71,19 @@ export default async function GuidesIndex({
   if (!isGuideLang(lang)) notFound();
   const { country } = await searchParams;
 
-  const countries = getGuideCountries(); // countries that actually have posts
-  const selected =
-    country && countries.some((c) => c.code === country.toUpperCase())
-      ? country.toUpperCase()
-      : countries[0]?.code ?? null;
-  const posts = selected ? guidesByCountry(selected) : listAllGuides();
+  // Legacy ?country= URLs collapse onto the owning language hub — 308, so the old shape
+  // stops competing in the index. Unlike the portal, country is NOT a URL axis here: it is
+  // the reader's home market, and English covers both GB and AU.
+  if (country) {
+    const target = langForCountry(country) ?? lang;
+    permanentRedirect(`/${target}/guides`);
+  }
+
+  const markets = getGuideMarkets();
+  // A language folder with no posts is not a hub — 404 rather than serve an empty,
+  // indexable page.
+  if (!markets.some((m) => m.lang === lang)) notFound();
+  const posts = listGuides(lang);
 
   return (
     <div className="w-full">
@@ -84,28 +100,30 @@ export default async function GuidesIndex({
       {/* Country sidebar (left) + posts (right) */}
       <section className="w-full bg-white px-6 py-12 sm:py-16">
         <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:gap-12">
-          {/* Country nav — a link per country that holds posts */}
+          {/* Language nav — a link per hub. Country is deliberately NOT the axis here: it
+              records the reader's home market, and English spans GB and AU. */}
           <aside className="shrink-0 md:w-56">
             <p className="mb-3 text-xs font-black uppercase tracking-widest text-black/40">
-              Countries
+              Languages
             </p>
-            {countries.length === 0 ? (
+            {markets.length === 0 ? (
               <p className="text-sm font-semibold text-black/50">No guides yet.</p>
             ) : (
               <ul className="flex flex-row flex-wrap gap-2 md:flex-col md:gap-1">
-                {countries.map((c) => {
-                  const active = c.code === selected;
+                {markets.map((c) => {
+                  const active = c.lang === lang;
                   return (
-                    <li key={c.code}>
+                    <li key={c.lang}>
                       <Link
-                        href={`/${lang}/guides?country=${c.code}`}
+                        href={`/${c.lang}/guides`}
+                        hrefLang={c.lang}
                         className={`flex items-center justify-between gap-3 border px-4 py-2.5 text-sm font-black transition-colors md:border-0 md:border-l-4 md:px-3 ${
                           active
                             ? "border-[#ff7a00] bg-[#ff7a00] text-white md:bg-transparent md:text-black"
                             : "border-black/15 text-black/70 hover:bg-black/5 md:border-transparent md:hover:border-black/20"
                         }`}
                       >
-                        <span>{countryName(c.code)}</span>
+                        <span>{GUIDE_LANG_NATIVE[c.lang]}</span>
                         <span className={active ? "text-white md:text-[#ff7a00]" : "text-black/30"}>{c.count}</span>
                       </Link>
                     </li>
@@ -122,10 +140,12 @@ export default async function GuidesIndex({
             ) : (
               <GuidePostList
                 posts={posts.map((g) => ({
-                  href: `/${g.lang}/guides/${g.slug}`,
+                  // Every post on this hub is in this hub's language, so the extract
+                  // cards link inside /<lang>/ — card and article share one path.
+                  href: `/${lang}/guides/${g.slug}`,
                   title: g.headline || g.title, // article headline (matches the post page); SEO title stays on <title>
                   description: g.description,
-                  dateLabel: g.date ? fmtDate(g.date, g.lang) : undefined,
+                  dateLabel: g.date ? fmtDate(g.date, lang) : undefined,
                 }))}
               />
             )}
