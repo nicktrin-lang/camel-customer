@@ -24,12 +24,70 @@ Working Rules
 ═══════════════════════════════════════════════════════════════════════════════
 LATEST SESSION — 2026-09-02  (read this first)
 ═══════════════════════════════════════════════════════════════════════════════
-Guides show the article headline as H1 (SEO title still goes to Google) · growth quick
-wins · guides localization added then REVERTED · 9 stale Growth Engine PRs triaged
+Guides re-routed by MARKET (country), not language · headline as H1 with the SEO title still
+going to Google · growth quick wins · localization added then REVERTED · 9 stale PRs triaged
 
 ## 🧭 State of the repos (verified, not assumed)
-- Customer `main` **69a8998**, portal `main` **7133e66**. Both pulled, clean, 0 behind.
-- **0 open PRs in both repos.** `npx tsc --noEmit` exit 0 in both.
+- Customer `main` **b47a080**, portal `main` **bfa985c**. Both pulled, clean, 0 behind.
+- **0 open PRs in both repos.** `npx tsc --noEmit` exit 0 in both; `next build` succeeds in
+  both; all nine guide market hubs verified live over HTTP.
+
+## 🌍 GUIDES ARE ROUTED BY MARKET, NOT LANGUAGE (#100–#101 — read before touching guides)
+
+**One folder = one URL segment = one country. Language is an ATTRIBUTE of a market, never
+the axis.** The folder name IS the lowercased ISO country code so the two cannot drift.
+
+```
+content/guides/gb/ 49 -> /gb/guides   English, written for UK readers, ABOUT SPAIN
+content/guides/au/  2 -> /au/guides   English, about Australia
+content/guides/fr/  1 -> /fr/guides   French
+```
+
+`lib/guides.ts` exports `GUIDE_MARKETS` + `MARKET_LANG` as the ROUTING type; `GuideLang`
+survives only for labels, date formatting and hreflang. Route dir is `app/[market]/`.
+
+**THIS repo is why the distinction exists.** `country` here is the READER's home market,
+NOT the subject: the 49 `gb` posts are about Benidorm, Lanzarote, Vigo and Fuerteventura —
+Spanish destinations — written in English for UK travellers. The `au` posts are English too.
+**English spans two countries**, so language cannot be the axis without putting Adelaide and
+Benidorm on one hub competing for the same English queries. (In `camel-portal` language and
+country coincide, but it runs the SAME model on purpose so nobody "harmonises" the two repos
+and breaks this one.) **Do not collapse markets back into languages.**
+
+### The bug this fixed
+`/en/guides` was the single canonical hub and every variant canonicalised into it. With no
+`?country=` the code fell back to `countries[0]` — alphabetically **Australia** — so the
+canonical hub for the entire section served **2 Australian guides of 52**, while the 49
+Spain destination guides sat on `?country=GB` declaring themselves duplicates of it.
+
+### Superseded — do NOT reintroduce
+An intermediate shape (#100) kept language folders with self-canonical hubs. Market paths
+replaced it the same day. **`?country=` now 308s** to the market that owns those posts —
+that redirect is the only reason old URLs still resolve.
+
+### Gotchas that cost time
+- **`next.config.ts` `outputFileTracingIncludes` is keyed by ROUTE PATH.** Left at
+  `/[lang]/guides` after renaming the dir, the build succeeds locally and **404s every guide
+  on Vercel**. Rekeyed to `/[market]/...`.
+- **Redirect ORDER matters.** The two Australian posts lived under `/en/` like the other 49,
+  so their exact redirects are listed BEFORE the `/en/guides/:slug -> /gb/guides/:slug`
+  catch-all. Without that they would land in `gb`. Verified live: the Sydney post 308s to
+  `/au/`, the Benidorm post to `/gb/`.
+- **`hreflang` must be the full BCP-47 tag** (`en-GB` vs `en-AU`) — language alone cannot
+  distinguish two markets that share one. Same for `<html lang>`.
+- Any nav/footer link built as `/${locale}/guides` is wrong: locale is a UI language, market
+  is a country. The footer is pinned to `/gb/guides`.
+
+### The real opportunity, NOT done
+For a customer-facing site the axis that earns traffic is **destination** — Málaga,
+Barcelona, Lanzarote, Sydney — not the reader's passport. 49 guides currently share one hub
+and one `country` tag, so "car hire delivered Málaga airport" has no dedicated landing page.
+That is a content-strategy change for RankMoss, not a routing one.
+
+### ⚠️ COORDINATION — Growth Engine / RankMoss
+It writes to `content/guides/<folder>`. It must now target **market** folders: `gb/` or
+`au/`, **never `en/`**, or new posts land in a folder that no longer routes and silently do
+not render.
 
 ## ✅ MERGED & LIVE this session (customer)
 - **#91** — growth quick wins. `GoogleAnalytics.tsx` read `window.__GA_IDS__`, which was
