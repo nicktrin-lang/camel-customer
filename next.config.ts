@@ -54,6 +54,12 @@ const nextConfig: NextConfig = {
       },
       { source: "/en/guides/:slug", destination: "/gb/guides/:slug", permanent: true },
       { source: "/en/guides", destination: "/gb/guides", permanent: true },
+      // es/it/pt/de were valid LANGUAGE paths under the old aggregated index and rendered
+      // the full list (canonicalised to /en/guides). They are valid MARKET codes but this
+      // site has no content for them, so the route 404s. Send them to the primary hub —
+      // a 301 keeps whatever crawl equity they had; a 404 throws it away.
+      { source: "/:market(es|it|pt|de)/guides", destination: "/gb/guides", permanent: true },
+      { source: "/:market(es|it|pt|de)/guides/:slug", destination: "/gb/guides/:slug", permanent: true },
     ];
   },
   async headers() {
