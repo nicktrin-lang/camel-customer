@@ -29,17 +29,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // list a single aggregated index that every variant consolidated into, which left the
   // hub showing whichever country sorted first (Australia, 2 posts) while the other 49
   // were reachable only via ?country=GB.
-  const guideIndexes: MetadataRoute.Sitemap = getGuideMarkets().map(({ lang }) => ({
-    url: `${base}/${lang}/guides`,
+  const guideIndexes: MetadataRoute.Sitemap = getGuideMarkets().map(({ market }) => ({
+    url: `${base}/${market}/guides`,
     lastModified: now,
     changeFrequency: "weekly" as const,
     priority: 0.7,
   }));
-  const guidePosts: MetadataRoute.Sitemap = getAllGuideParams().map(({ lang, slug }) => {
-    const meta = listGuides(lang).find((g) => g.slug === slug);
+  const guidePosts: MetadataRoute.Sitemap = getAllGuideParams().map(({ market, slug }) => {
+    const meta = listGuides(market).find((g) => g.slug === slug);
     const lastModified = meta?.date ? new Date(meta.date) : now;
     return {
-      url: `${base}/${lang}/guides/${slug}`,
+      url: `${base}/${market}/guides/${slug}`,
       lastModified: isNaN(lastModified.getTime()) ? now : lastModified,
       changeFrequency: "monthly",
       priority: 0.6,

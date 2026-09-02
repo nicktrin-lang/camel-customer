@@ -52,7 +52,7 @@ export default function Footer() {
             <div className="flex flex-col gap-3">
               <p className="text-xs font-black uppercase tracking-widest text-white/50">{t("footer.company")}</p>
               <Link href="/about"                                         className="text-sm font-bold text-white hover:underline">{t("footer.aboutUs")}</Link>
-              <Link href={`/${locale}/guides`}                            className="text-sm font-bold text-white hover:underline">{GUIDES_LABEL[locale] ?? "Guides"}</Link>
+              <Link href="/gb/guides"                            className="text-sm font-bold text-white hover:underline">{GUIDES_LABEL[locale] ?? "Guides"}</Link>
               <a    href="https://portal.camel-global.com/partner/signup" className="text-sm font-bold text-white hover:underline">{t("footer.becomePartner")}</a>
               <Link href="/contact"                                        className="text-sm font-bold text-white hover:underline">{t("footer.contact")}</Link>
             </div>
