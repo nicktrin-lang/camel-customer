@@ -22,7 +22,79 @@ Working Rules
 - camel-coming-soon is a submodule and always shows modified — ignore it, never `git add` it;
   always `git add <specific-file>`, never `git add .`.
 ═══════════════════════════════════════════════════════════════════════════════
-LATEST SESSION — 2026-08-12  (read this first)
+LATEST SESSION — 2026-09-02  (read this first)
+═══════════════════════════════════════════════════════════════════════════════
+Guides show the article headline as H1 (SEO title still goes to Google) · growth quick
+wins · guides localization added then REVERTED · 9 stale Growth Engine PRs triaged
+
+## 🧭 State of the repos (verified, not assumed)
+- Customer `main` **69a8998**, portal `main` **7133e66**. Both pulled, clean, 0 behind.
+- **0 open PRs in both repos.** `npx tsc --noEmit` exit 0 in both.
+
+## ✅ MERGED & LIVE this session (customer)
+- **#91** — growth quick wins. `GoogleAnalytics.tsx` read `window.__GA_IDS__`, which was
+  never set, so SPA route-change `page_view` events never fired — fixed. Added Google
+  **Consent Mode** (`analytics_storage: denied` by default) + sitewide Organization
+  JSON-LD in `app/layout.tsx`; Decline in `CookieBanner.tsx` now signals consent update
+  denied. New `app/about/layout.tsx` + `app/contact/layout.tsx` give those client-component
+  pages their own title/description/canonical instead of inheriting the homepage's.
+  Article JSON-LD on guide posts. **"Become a partner" link added to the header nav**
+  (desktop + mobile) → `portal.camel-global.com/partner/signup`.
+- **#92 → #93 — localize guides into 6 languages, then REVERTED. Net effect ZERO.**
+  #92 added 175 machine-translated guides + hreflang + per-language index/sitemap;
+  #93 removed all of it. **Do not try to "restore" #92** — content localization belongs
+  in the RankMoss delivery pipeline, not hand-added to the site (it drifted out of sync
+  and mixed English framing). `main` has **no** bulk translations and **no** hreflang code.
+- **#94** — one French guide delivered by the RankMoss pipeline (the correct flow). So
+  `content/guides/` is `en` + `fr`, with exactly **one** `fr/` guide, on purpose.
+- **#95 / #96** — the guide **post page and list cards now show the article's own
+  headline** (the body's first `# `), while `generateMetadata` keeps the concise
+  frontmatter `title` on `<title>`/canonical/OG for Google. `lib/guides.ts` gained
+  `firstMarkdownH1()` + optional `headline` on `GuideMeta`. #96 was the second commit of
+  #95 that landed on the branch after #95 merged, hence the split.
+  34 of 51 customer guides have a body H1 that differs from the SEO title; **3 have no
+  body H1 at all** and correctly fall back to `guide.title`.
+  **Ported to the portal in portal #76** — both repos now behave identically.
+
+## 🔍 Verified live in the browser (not just on disk)
+Loaded the real pages on **both** domains and read the rendered DOM: exactly one `<h1>`
+per post = the article headline, `<title>`/canonical/OG = the SEO title, body no longer
+repeats the H1, list cards show the headline. Deployed and serving.
+
+## ⚠️ INCIDENT — the Growth Engine self-merge failed silently 11 times over a month
+The engine is supposed to open AND merge its own `growth-engine/*` guide PRs via admin
+bypass. **11 sat open** (customer #28/#48/#51/#52/#54/#63/#65/#66/#79, portal #27/#35),
+oldest 2026-07-30. Same failure class as the `Bash(gh pr merge:*)` rule going missing.
+**Add a periodic check: any open `growth-engine/*` PR older than a week?**
+
+Triaged rather than bulk-merged, because merging all 11 would have made content
+cannibalisation worse:
+- **Merged: #28** (Sydney — `main` had only Adelaide) and **portal #35**
+  (Zaragoza/Pamplona — no overlap).
+- **Closed 9, deliberately — do NOT re-merge them:**
+  - **#79** — its file already existed on `main`. Pure duplicate.
+  - **#48/#51/#52/#63/#66** — `main` already carries **6 Málaga guides**; these five
+    differ only in phrasing ("Delivers Your Car to You" vs "How Camel Global Delivers
+    Your Car to the Airport" vs "Skip the Desk"). Would have made 11 pages on one query.
+  - **#65** (Seville) and **#54** (Barcelona airport) — near-title-identical to guides
+    already on `main`.
+  - portal **#27** — would have been a 7th "listar mi empresa" guide.
+- All closes carry a reason on the PR. Reversible with `gh pr reopen <n>`.
+
+**Before merging any future guide PR, check `main` for an existing guide on the same
+city/term.** `ls content/guides/<lang>/ | grep -i <term>`.
+
+## 🔗 Portal-side outreach work (context — code is in camel-portal)
+Partner outreach emails now set a `Reply-To` (portal #77) — they send from `noreply@`
+and an interested partner who hit Reply previously reached nobody. And the whole
+outreach→signup attribution chain was dead (portal #78): the query string was dropped
+by `<Link href="/partner/signup">` and again by `router.replace(...)`, so every outreach
+signup was recorded as organic and `ref=<prospect_id>` was never read by anything.
+Fixed with `lib/outreachAttribution.ts` (sessionStorage, tab-scoped, try/catch).
+Outreach language is fine — Spain prospects do get the Spanish email.
+
+═══════════════════════════════════════════════════════════════════════════════
+PREVIOUS SESSION — 2026-08-12
 ═══════════════════════════════════════════════════════════════════════════════
 Repo hygiene + doc truth-up: the AU/NZ branch was merged all along and the docs said otherwise
 
