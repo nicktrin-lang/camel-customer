@@ -85,8 +85,12 @@ cannibalisation worse:
 city/term.** `ls content/guides/<lang>/ | grep -i <term>`.
 
 ## 🔗 Portal-side outreach work (context — code is in camel-portal)
-Partner outreach emails now set a `Reply-To` (portal #77) — they send from `noreply@`
-and an interested partner who hit Reply previously reached nobody. And the whole
+Partner outreach emails now set `"Reply-To": partners@camel-global.com` (portal #77,
+corrected in portal #80) — they send from `noreply@` and an interested partner who hit
+Reply previously reached nobody. #77 first set a personal Gmail; a `Reply-To` is VISIBLE
+to the recipient, so it must be a company mailbox. `partners@camel-global.com` is also
+where `app/api/contact/route.ts:12` routes "Partnership / become a partner" enquiries in
+**this** repo too — outreach and website partner replies now land in one place. And the whole
 outreach→signup attribution chain was dead (portal #78): the query string was dropped
 by `<Link href="/partner/signup">` and again by `router.replace(...)`, so every outreach
 signup was recorded as organic and `ref=<prospect_id>` was never read by anything.
