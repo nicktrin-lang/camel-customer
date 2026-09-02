@@ -1,5 +1,6 @@
 import "./globals.css";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { isGuideMarket, marketHrefLang } from "@/lib/guides";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import ClientRootLayout from "./ClientRootLayout";
@@ -113,13 +114,11 @@ function getGaId(host: string): string {
 // Guides live at /<market>/guides/... where the segment is a COUNTRY, not a language —
 // /gb/guides and /au/guides are both English. Declare the full BCP-47 tag so each post
 // says which market it is written for, not just which language. Everything else is en-GB.
-const GUIDE_MARKET_LANG: Record<string, string> = {
-  gb: "en-GB", ie: "en-IE", us: "en-US", ca: "en-CA", au: "en-AU", nz: "en-NZ",
-  nl: "en-NL", es: "es-ES", fr: "fr-FR", it: "it-IT", pt: "pt-PT", de: "de-DE",
-};
 function htmlLangFromPath(pathname: string): string {
   const m = pathname.match(/^\/([a-z]{2})\/guides(\/|$)/);
-  return (m && GUIDE_MARKET_LANG[m[1]]) || "en";
+  // Derived from the content, not a table: marketHrefLang reads the market's own
+  // `language` frontmatter, so a country added tomorrow declares itself correctly.
+  return m && isGuideMarket(m[1]) ? marketHrefLang(m[1]) : "en";
 }
 
 // Sitewide Organization schema so search and AI engines have a canonical entity for

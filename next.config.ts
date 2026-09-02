@@ -1,4 +1,22 @@
 import type { NextConfig } from "next";
+import fs from "node:fs";
+import path from "node:path";
+
+// Language codes that were valid guide paths before the move to market routing. Each is
+// redirected ONLY while it has no content of its own — see redirects() below.
+const LEGACY_LANG_PATHS = ["es", "it", "pt", "de"] as const;
+
+function emptyLegacyMarkets(): string[] {
+  return LEGACY_LANG_PATHS.filter((m) => {
+    try {
+      return !fs
+        .readdirSync(path.join(process.cwd(), "content", "guides", m))
+        .some((f) => f.toLowerCase().endsWith(".md"));
+    } catch {
+      return true; // no folder at all = empty
+    }
+  });
+}
 
 const securityHeaders = [
   { key: "X-Frame-Options",           value: "SAMEORIGIN" },
@@ -55,11 +73,19 @@ const nextConfig: NextConfig = {
       { source: "/en/guides/:slug", destination: "/gb/guides/:slug", permanent: true },
       { source: "/en/guides", destination: "/gb/guides", permanent: true },
       // es/it/pt/de were valid LANGUAGE paths under the old aggregated index and rendered
-      // the full list (canonicalised to /en/guides). They are valid MARKET codes but this
-      // site has no content for them, so the route 404s. Send them to the primary hub —
-      // a 301 keeps whatever crawl equity they had; a 404 throws it away.
-      { source: "/:market(es|it|pt|de)/guides", destination: "/gb/guides", permanent: true },
-      { source: "/:market(es|it|pt|de)/guides/:slug", destination: "/gb/guides/:slug", permanent: true },
+      // the full list. They are valid MARKET codes but this site has no content for them,
+      // so the route would 404. Send them to the primary hub — a 301 keeps whatever crawl
+      // equity they had; a 404 throws it away.
+      //
+      // SELF-DISABLING. Redirects are evaluated BEFORE routing, so a static rule here would
+      // shadow the real hub the day content arrives: /es/guides would 308 to /gb/guides and
+      // /es/guides/<slug> to a /gb/ slug that does not exist — a 404 — with nothing
+      // erroring. So the rule is emitted only while the folder is genuinely empty, and
+      // disappears on the next build once a post lands. No coordination required.
+      ...emptyLegacyMarkets().flatMap((m) => [
+        { source: `/${m}/guides`, destination: "/gb/guides", permanent: true },
+        { source: `/${m}/guides/:slug`, destination: "/gb/guides/:slug", permanent: true },
+      ]),
     ];
   },
   async headers() {
