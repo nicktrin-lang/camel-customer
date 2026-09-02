@@ -56,6 +56,11 @@ export default async function GuidePost({
   const guide = getGuide(lang, slug);
   if (!guide) notFound();
   const related = relatedGuides(lang, slug, 3);
+  // The body's own H1 is the full on-page headline; show THAT in the header band.
+  // The concise SEO `title` (frontmatter) stays on the <title> tag / Google via
+  // generateMetadata. Falls back to `title` if a post has no body H1.
+  const { heading, rest } = extractLeadingH1(guide.html);
+  const displayTitle = heading || guide.title;
 
   return (
     <article className="w-full">
@@ -65,7 +70,7 @@ export default async function GuidePost({
           __html: JSON.stringify({
             "@context": "https://schema.org",
             "@type": "Article",
-            headline: guide.title,
+            headline: displayTitle,
             description: guide.description,
             inLanguage: lang,
             datePublished: guide.date || undefined,
@@ -97,9 +102,10 @@ export default async function GuidePost({
                 {fmtDate(guide.date, lang)}
               </p>
             )}
-            {/* The H1 is inside the Markdown body; this is the eyebrow/title band */}
+            {/* The article's full headline (the body's H1), shown as the page H1.
+                The concise SEO title lives on the <title> tag / SERP instead. */}
             <h1 className="text-3xl font-black leading-tight text-white md:text-5xl">
-              {guide.title}
+              {displayTitle}
             </h1>
           </div>
         </div>
@@ -115,7 +121,7 @@ export default async function GuidePost({
         ) : null}
         <div
           className="guide-body"
-          dangerouslySetInnerHTML={{ __html: stripLeadingH1(guide.html, guide.title) }}
+          dangerouslySetInnerHTML={{ __html: rest }}
         />
 
         {/* Booking CTA — chrome text follows the site language switcher */}
@@ -153,9 +159,27 @@ export default async function GuidePost({
   );
 }
 
-// The Markdown body already opens with an H1 that includes the brand name. We
-// render our own styled title band above, so drop the body's first H1 to avoid
-// a duplicate on the page (keeps a single H1 for SEO).
-function stripLeadingH1(html: string, _title: string): string {
-  return html.replace(/^\s*<h1[^>]*>[\s\S]*?<\/h1>/i, "");
+// The Markdown body opens with an H1 (the article's full headline). We render that
+// headline in the styled title band above and drop it from the body, so the page has
+// a single H1 = the full headline. Returns the heading text (tags stripped) + the body
+// without it; heading is null if the post has no leading H1.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&"); // last, so a real "&amp;" isn't double-decoded
+}
+
+function extractLeadingH1(html: string): { heading: string | null; rest: string } {
+  const m = html.match(/^\s*<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (!m) return { heading: null, rest: html };
+  // Strip tags, then decode entities: the heading goes into a React text node, which
+  // re-escapes, so a raw "&#39;" would otherwise render as literal text.
+  const heading = decodeEntities(m[1].replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim() || null;
+  return { heading, rest: html.slice(m[0].length) };
 }
