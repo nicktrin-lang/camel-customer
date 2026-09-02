@@ -28,13 +28,33 @@ const nextConfig: NextConfig = {
   // The guides routes read Markdown from content/guides/ with fs at request time.
   // Force those files into the serverless bundle so runtime reads work on Vercel.
   outputFileTracingIncludes: {
-    "/[lang]/guides": ["./content/guides/**/*"],
-    "/[lang]/guides/[slug]": ["./content/guides/**/*"],
+    "/[market]/guides": ["./content/guides/**/*"],
+    "/[market]/guides/[slug]": ["./content/guides/**/*"],
     // The sitemap is a metadata route → its internal key carries a /route
     // suffix; the bare "/sitemap.xml" key never matched, so guide posts were
     // silently missing from the deployed sitemap. Key both to be safe.
     "/sitemap.xml": ["./content/guides/**/*"],
     "/sitemap.xml/route": ["./content/guides/**/*"],
+  },
+  // Guides moved from language folders to MARKET folders (/en/guides -> /gb/guides), so
+  // every previously indexed URL is redirected rather than dropped. The two Australian
+  // posts must come FIRST: they were under /en/ too, and the catch-all below would
+  // otherwise send them to /gb/.
+  async redirects() {
+    return [
+      {
+        source: "/en/guides/meet-and-greet-car-hire-adelaide-airport-camel-global",
+        destination: "/au/guides/meet-and-greet-car-hire-adelaide-airport-camel-global",
+        permanent: true,
+      },
+      {
+        source: "/en/guides/meet-and-greet-car-hire-sydney-skip-the-rental-desk-with-camel-global",
+        destination: "/au/guides/meet-and-greet-car-hire-sydney-skip-the-rental-desk-with-camel-global",
+        permanent: true,
+      },
+      { source: "/en/guides/:slug", destination: "/gb/guides/:slug", permanent: true },
+      { source: "/en/guides", destination: "/gb/guides", permanent: true },
+    ];
   },
   async headers() {
     return [
