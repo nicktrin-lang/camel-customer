@@ -28,7 +28,7 @@ Guides re-routed by MARKET (country), not language · headline as H1 with the SE
 going to Google · growth quick wins · localization added then REVERTED · 9 stale PRs triaged
 
 ## 🧭 State of the repos (verified, not assumed)
-- Customer `main` **ce84bd7**, portal `main` **4a2286d**. Both pulled, clean, 0 behind.
+- Customer `main` **c59b780**, portal `main` **44fdc9a**. Both pulled, clean, 0 behind.
 - **0 open PRs in both repos.** `npx tsc --noEmit` exit 0 in both; `next build` succeeds in
   both; all nine guide market hubs verified live over HTTP.
 
@@ -387,14 +387,14 @@ Guides polish · SITEMAP root-cause fix · never-merge workflow · Vercel cost �
   watch for.)
 
 ## ⏳ PENDING (Nick's actions — not done yet)
-- **Stripe AU/NZ (recorded in `~/camel-portal/STRIPE_REWRITE_DESIGN.md`, Anannya 2026-07-29):**
-  (1) enable MCS/ACP self-serve at Dashboard → Settings → Connect → Multi-Currency Settlement
-  toggle — VERIFY it gives the PLATFORM a retained AUD balance to fund OutboundPayments, not
-  merely per-connected-account settlement; (2) open a Wise UK account with UK sort code/account
-  DENOMINATED IN AUD (not Australian BSB) — confirmed correct; (3) sandbox Global Payouts is
-  ENABLED on `acct_1TwWcWG5yRPYnAl6`. Then dev-test `lib/portal/stripeGlobalPayouts.ts` (portal
-  repo, still "written from docs, unverified") against the sandbox — use the portal's
-  `scripts/verify-global-payouts-sandbox.ts`.
+- **Stripe AU/NZ — NOT BLOCKED ANY MORE (2026-09-03).** The old three-step list here was wrong
+  on all three counts and cost five weeks. All AU/NZ code and docs live in `~/camel-portal`;
+  the full record is in that repo's handover under "AU/NZ GLOBAL PAYOUTS". Short version:
+  payouts now fund from GBP (Stripe converts at send), an AUD balance was never a Stripe
+  requirement, `Settings → Connect → Multi-Currency Settlement` is the WRONG feature and must
+  stay off, and the `outbound_payment_quotes` endpoint does not exist so quoting is best-effort.
+  Nick's call: ship it, do not chase Stripe, fund the financial account by hand only if AU
+  interest appears. **Nothing here is customer-repo work.**
   *(Corrected 2026-08-12: this line used to end "AU/NZ code (Units 1-6) lives on portal branch
   `claude/onboarding-country-aunz-9bc42f`, not merged." That branch WAS merged via PR #5. The code
   is on portal `main`; what remains outstanding is the dashboard setup and sandbox verification,
