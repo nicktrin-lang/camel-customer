@@ -15,6 +15,7 @@ import {
 } from "@/lib/guides";
 import { GuidesHero } from "@/app/components/GuidesText";
 import GuidePostList from "@/app/components/GuidePostList";
+import { listDirectGuides } from "@/lib/guides.direct";
 
 export const dynamicParams = true;
 
@@ -80,10 +81,17 @@ export default async function GuidesIndex({
   }
 
   const markets = getGuideMarkets();
-  // A language folder with no posts is not a hub — 404 rather than serve an empty,
-  // indexable page.
-  if (!markets.some((m) => m.market === market)) notFound();
-  const posts = listGuides(market);
+  // Legacy GitHub-delivered posts (filesystem) plus RankMoss direct-push posts (Supabase),
+  // de-duped by slug. A direct (live) post supersedes a stale bundled copy of the same slug.
+  const fsPosts = listGuides(market);
+  const directPosts = await listDirectGuides(market);
+  const bySlug = new Map<string, (typeof fsPosts)[number]>();
+  for (const g of fsPosts) bySlug.set(g.slug, g);
+  for (const g of directPosts) bySlug.set(g.slug, g);
+  const posts = [...bySlug.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  // A market with no posts (neither filesystem nor direct) is not a hub — 404 rather than
+  // serve an empty, indexable page.
+  if (posts.length === 0) notFound();
 
   return (
     <div className="w-full">
