@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import Turnstile from "@/app/components/Turnstile";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+import { track } from "@/lib/analytics";
 
 async function verifyCaptcha(token: string): Promise<boolean> {
   const res = await fetch("/api/auth/verify-captcha", {
@@ -52,6 +53,7 @@ function LoginForm() {
       if (!ok) { setError("CAPTCHA verification failed."); resetLoginCaptcha(); setLoading(false); return; }
       const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (err) throw err;
+      track("login", { method: "email", booking_in_progress: nextPath === "/book" || nextPath.startsWith("/checkout/") });
       router.push(nextPath);
       router.refresh();
     } catch (e: any) {

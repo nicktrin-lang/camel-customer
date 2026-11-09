@@ -7,6 +7,7 @@ import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import Turnstile from "@/app/components/Turnstile";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+import { track } from "@/lib/analytics";
 
 const inputCls = "w-full bg-[#f0f0f0] px-4 py-4 text-base font-medium text-black outline-none focus:bg-[#e8e8e8] transition-colors placeholder:text-black/40";
 const labelCls = "block text-xs font-black uppercase tracking-widest text-black mb-2";
@@ -61,6 +62,7 @@ function SignupForm() {
         const j = await profileRes.json().catch(() => null);
         throw new Error(j?.error || "Failed to create profile.");
       }
+      track("sign_up", { method: "email", booking_in_progress: nextPath === "/book" });
 
       if (nextPath === "/book") {
         let draft: Record<string, any> | null = null;
@@ -102,6 +104,7 @@ function SignupForm() {
               console.log("[CAMEL DEBUG] booking API response:", bookRes.status, bookJson);
               if (bookRes.ok && bookJson?.data?.id) {
                 sessionStorage.removeItem("camel_booking_draft");
+                track("booking_request_created", { request_id: bookJson.data.id, source: "after_signup" });
                 router.push(`/bookings/${bookJson.data.id}`);
                 return;
               }

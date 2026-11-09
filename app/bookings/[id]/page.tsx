@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
+import { track, trackOnce } from "@/lib/analytics";
 
 type Currency = "EUR" | "GBP" | "USD" | "AUD" | "NZD" | "CAD";
 
@@ -620,8 +621,26 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
     tick(); const ti=setInterval(tick,1000); return ()=>clearInterval(ti);
   },[data?.request?.expires_at]);
 
+  // GA4 booking funnel: quotes seen, and payment completed (Stripe returns here with
+  // ?payment=success). Once per request per tab, since this page polls every 10s.
+  const bidCount = data?.bids?.length ?? 0;
+  const hasBooking = !!data?.booking;
+  useEffect(()=>{
+    if (!requestId || hasBooking || bidCount===0) return;
+    trackOnce(`view_bids_${requestId}`, "view_bids", { request_id: requestId, bid_count: bidCount });
+  },[requestId,hasBooking,bidCount]);
+  useEffect(()=>{
+    if (requestId && paymentSuccess) trackOnce(`payment_complete_${requestId}`, "payment_complete", { request_id: requestId });
+  },[requestId,paymentSuccess]);
+
   async function acceptBid(bidId: string) {
     setAcceptingId(bidId); setError(null); setOk(null);
+    const bid = data?.bids?.find(b=>b.id===bidId);
+    track("bid_accept", {
+      request_id: requestId, bid_id: bidId, bid_count: bidCount,
+      currency: bid?.currency, value: bid?.total_price,
+      partner: bid?.partner_company_name || undefined,
+    });
     try {
       if (requestId) sessionStorage.setItem(`request_for_bid_${bidId}`, requestId);
       router.push(`/checkout/${bidId}`);
