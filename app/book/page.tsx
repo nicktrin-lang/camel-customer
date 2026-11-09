@@ -12,6 +12,7 @@ import Image from "next/image";
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { FLEET_CATEGORIES } from "@/app/components/portal/fleetCategories";
 import { coerceCurrency } from "@/lib/currency";
+import { track } from "@/lib/analytics";
 
 function calculateDurationMinutes(a: string, b: string): number | null {
   if (!a || !b) return null;
@@ -90,6 +91,7 @@ export default function BookPage() {
         const json = await res.json().catch(() => null);
         if (!res.ok) throw new Error(json?.error || "Failed to create booking.");
         sessionStorage.removeItem("camel_booking_draft");
+        track("booking_request_created", { request_id: json?.data?.id, source: "after_login" });
         router.push(`/bookings/${json?.data?.id}`);
       } catch (e: any) {
         setError(e?.message || "Something went wrong. Please try again.");

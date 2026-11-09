@@ -13,6 +13,7 @@ import { CITIES, DEFAULT_CITY, citiesByCountry, type CityEntry } from "@/lib/cit
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 import { useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
+import { track, trackOnce } from "@/lib/analytics";
 
 type Lang = keyof typeof translations;
 type AddressResult = {
@@ -291,29 +292,37 @@ function CustomerHome() {
 
   async function handleBookNow() {
     setError(null);
-    if (!pickupLat || !pickupLng)   { setError(t("home.error.pickupAddress")); return; }
-    if (!dropoffLat || !dropoffLng) { setError(t("home.error.dropoffAddress")); return; }
-    if (!pickupDate)                { setError(t("home.error.pickupDate")); return; }
-    if (!dropoffDate)               { setError(t("home.error.dropoffDate")); return; }
+    // Shows the error and tells GA which field stopped them.
+    const fail = (reason: string, msg: string) => { setError(msg); track("booking_form_error", { reason }); };
+    if (!pickupLat || !pickupLng)   { fail("pickup_address", t("home.error.pickupAddress")); return; }
+    if (!dropoffLat || !dropoffLng) { fail("dropoff_address", t("home.error.dropoffAddress")); return; }
+    if (!pickupDate)                { fail("pickup_date", t("home.error.pickupDate")); return; }
+    if (!dropoffDate)               { fail("dropoff_date", t("home.error.dropoffDate")); return; }
     const pickupAt  = toISOLocal(pickupDate);
     const dropoffAt = toISOLocal(dropoffDate);
     const duration  = calculateDurationMinutes(pickupAt, dropoffAt);
-    if (!duration)                  { setError(t("home.error.duration")); return; }
+    if (!duration)                  { fail("duration", t("home.error.duration")); return; }
     const cat = FLEET_CATEGORIES.find(c => c.slug === vehicleSlug);
-    if (!cat)                       { setError(t("home.error.vehicleCategory")); return; }
+    if (!cat)                       { fail("vehicle_category", t("home.error.vehicleCategory")); return; }
     if (!driverAge || isNaN(driverAgeNum) || driverAgeNum < 21) {
-      setError(t("home.error.mainDriverAge"));
+      fail("driver_age", t("home.error.mainDriverAge"));
       return;
     }
     for (let i = 0; i < additionalDrivers; i++) {
       const age = Number(additionalDriverAges[i]);
       if (!additionalDriverAges[i] || isNaN(age) || age < 21) {
-        setError(t("home.error.additionalDriverAge", { n: String(i + 1) }));
+        fail("additional_driver_age", t("home.error.additionalDriverAge", { n: String(i + 1) }));
         return;
       }
     }
     saveDraft();
     const { data: { session } } = await supabase.auth.getSession();
+    track("booking_submit", {
+      logged_in: !!session?.access_token,
+      city: `${city.country}|${city.city}`,
+      vehicle_category: cat.slug,
+      rental_days: Math.round(duration / (24 * 60)),
+    });
     if (!session?.access_token) { router.push("/login?next=/book"); return; }
     setSubmitting(true);
     try {
@@ -342,9 +351,11 @@ function CustomerHome() {
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || t("home.error.submitFailed"));
       sessionStorage.removeItem("camel_booking_draft");
+      track("booking_request_created", { request_id: json?.data?.id, source: "homepage" });
       router.push(`/bookings/${json?.data?.id}`);
     } catch (e: any) {
       setError(e?.message || t("home.error.submitFailed"));
+      track("booking_form_error", { reason: "submit_failed" });
       setSubmitting(false);
     }
   }
@@ -532,7 +543,11 @@ function CustomerHome() {
             </p>
           </div>
 
-          <div className="bg-white">
+          <div
+            className="bg-white"
+            onFocusCapture={() => trackOnce("booking_form_start", "booking_form_start")}
+            onPointerDownCapture={() => trackOnce("booking_form_start", "booking_form_start")}
+          >
             <p className="text-2xl font-black text-black mb-3 sm:text-3xl lg:text-4xl">
               {t("home.whereTitle")}
             </p>

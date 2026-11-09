@@ -10,6 +10,7 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 import { createCustomerBrowserClient } from "@/lib/supabase-customer/browser";
 import { useTranslation } from "@/lib/i18n/useTranslation";
 import { useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
+import { track } from "@/lib/analytics";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -149,6 +150,7 @@ function CheckoutForm({ intent, requestId, onError }: {
   async function handlePay() {
     if (!stripe || !elements) return;
     setPaying(true); setFormErr(""); onError("");
+    track("add_payment_info", { currency: curr, value: Number(intent.amount_total || 0) });
 
     const { error } = await stripe.confirmPayment({
       elements,
@@ -163,6 +165,7 @@ function CheckoutForm({ intent, requestId, onError }: {
 
     if (error) {
       const msg = error.message || "Payment failed. Please try again.";
+      track("payment_failed", { currency: curr, error_type: error.type, error_code: error.code || error.decline_code || undefined });
       setFormErr(msg); onError(msg); setPaying(false);
       return;
     }
