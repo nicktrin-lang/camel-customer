@@ -64,7 +64,7 @@ Added `van-9` "9 Seater Van" (9/9) and `cargo-van` "Cargo Van" (3 passengers, 20
 `app/components/portal/fleetCategories.tsx` exists in BOTH repos and must stay identical:
 matching is an exact slug compare. Partners add fleet themselves (Car Fleet / onboarding);
 admin has no add-fleet screen. The homepage passenger picker now runs to the largest
-category's max_passengers (16). The suitcase picker still stops at 6.
+category's max_passengers (16), and the suitcase picker to its max_suitcases (20, customer #147).
 
 ═══════════════════════════════════════════════════════════════════════════════
 SESSION — 2026-09-02
