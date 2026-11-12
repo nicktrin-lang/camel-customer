@@ -15,6 +15,9 @@ import { useTranslation } from "@/lib/i18n/useTranslation";
 import { useLanguage, type Locale } from "@/lib/i18n/LanguageContext";
 import { track, trackOnce } from "@/lib/analytics";
 
+// Passenger picker goes up to the biggest vehicle's seats (Minibus, 16).
+const MAX_PASSENGERS = Math.max(...FLEET_CATEGORIES.map(c => c.max_passengers));
+
 type Lang = keyof typeof translations;
 type AddressResult = {
   display_name: string;
@@ -664,7 +667,8 @@ function CustomerHome() {
               <div>
                 <label className={labelCls}>{t("home.passengers")}</label>
                 <select value={passengers} onChange={e => setPassengers(Number(e.target.value))} className={selectCls}>
-                  {[1,2,3,4,5,6,7,8,9].map(n => (
+                  {/* Up to the largest fleet category's seats, so every vehicle can be requested full */}
+                  {Array.from({ length: MAX_PASSENGERS }, (_, i) => i + 1).map(n => (
                     <option key={n} value={n}>{n} {n > 1 ? t("home.passengers.plural") : t("home.passenger")}</option>
                   ))}
                 </select>
