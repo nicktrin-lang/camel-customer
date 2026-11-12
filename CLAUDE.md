@@ -208,7 +208,8 @@ The chat bubble only renders when `isCustomerLoggedIn` — by design, not a bug.
 - When editing large files, back up first and assert the anchor matched before writing. Abort on
   mismatch, never silently no-op.
 - `.bak` files are gitignored. Sweep them when convenient.
-- Branch protection: `main` requires PRs; pushes have used admin bypass.
+- Branch protection: `main` requires a PR **and one approving review** (repository ruleset).
+  Claude can't approve its own PR: open it, and Nick merges. Never `--admin`.
 
 ### Deploy
 ```bash
@@ -233,5 +234,8 @@ git tag -a v-stable-chatNN -m "description" && git push origin v-stable-chatNN
   `test-booking` naming is historical, **these are live production routes**, not scaffolding.
 - `ChatWidget.tsx` and `Footer.tsx` exist in both repos but are **NOT identical**. The customer
   ChatWidget has a booking-focused welcome message. Update separately.
+- `app/components/portal/fleetCategories.tsx` exists in both repos and **must stay identical**:
+  customer requests match partner fleet by exact slug.
+- Map tiles: OpenStreetMap only. CARTO basemaps now serve an "API KEY REQUIRED" image.
 - `lib/supabase-customer/browser.ts` sets `detectSessionInUrl: false`.
 - `app/reset-password/layout.tsx` is a standalone layout that bypasses `ClientRootLayout`.

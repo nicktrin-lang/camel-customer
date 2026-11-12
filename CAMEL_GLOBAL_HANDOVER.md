@@ -22,7 +22,52 @@ Working Rules
 - camel-coming-soon is a submodule and always shows modified — ignore it, never `git add` it;
   always `git add <specific-file>`, never `git add .`.
 ═══════════════════════════════════════════════════════════════════════════════
-LATEST SESSION — 2026-09-02  (read this first)
+LATEST SESSION — 2026-11-12  (read this first)
+═══════════════════════════════════════════════════════════════════════════════
+Outreach funnel tracking · blank maps fixed · customer GA4 booking funnel · 9 Seater Van +
+Cargo Van · passengers up to 16. Partners are now arriving from the outreach emails.
+
+## ⚠️ main now needs ONE APPROVING REVIEW (both repos)
+A repository ruleset (`pull_request`, 1 approval) blocks merging without a review. Claude
+cannot approve its own PRs and must not use `--admin`: open the PR, then Nick merges.
+
+## 📈 Outreach funnel, recorded in our own DB (portal #148, `OUTREACH_FUNNEL_SCHEMA.sql` applied)
+`outreach_prospects.landed_at / landing_count / signup_started_at / signed_up_at /
+signed_up_user_id`, written by the `outreach_track()` RPC. A cookieless beacon
+(`POST /api/outreach/track`, `sendOutreachBeacon()` in `lib/outreachAttribution.ts`) fires
+from the landing page and the signup form when the email's `ref` is present; JS-only, so link
+scanners don't count. `complete-signup` takes `outreachRef` and stamps the exact prospect.
+Partner Outreach shows Visited Site / Started Signup cards and an On Site column; "signed up"
+matches by this link first, then email, then company name. GA is unchanged alongside it (it
+still under-counts: analytics waits for cookie consent).
+Auto-send (#146) ran as designed: 3 Nov sent 50, 0 failed. First outreach signup by 6 Nov.
+Not fixed: `click_country` is always null (the ipapi.co lookup in the Resend webhook fails).
+
+## 🗺️ Maps were blank (portal #149)
+CARTO basemaps now return an "API KEY REQUIRED" tile with HTTP 200. `MapPickerInner.tsx`
+(partner approvals, admin accounts, partner profile, onboarding, signup fleet) switched to
+OpenStreetMap like every other map. Don't reintroduce `basemaps.cartocdn.com`.
+Data issue seen, not fixed: AUTOS GUAYRE S.L. (Costa Teguise, Lanzarote) has its fleet pin at
+27.8457,-15.4663, which is Gran Canaria. Matching uses that pin.
+
+## 📊 Customer GA4 booking funnel (customer #143, `lib/analytics.ts`)
+booking_form_start → booking_form_error(reason) → booking_submit(logged_in) → login/sign_up →
+booking_request_created(source) → view_bids → bid_accept → begin_checkout → add_payment_info →
+payment_failed / payment_complete → purchase (server, Stripe webhook). Verified in a browser
+up to booking_form_error; later steps tsc-only. Known gaps: server `purchase` uses
+client_id = booking id, so it isn't joined to the visitor's session (fixing it means touching
+create-intent's idempotent PaymentIntent params: left alone); the webhook always sends to the
+production property, so staging test payments show as live revenue.
+
+## 🚐 Fleet categories (portal #150, customer #144, customer #145)
+Added `van-9` "9 Seater Van" (9/9) and `cargo-van` "Cargo Van" (3 passengers, 20 suitcases).
+`app/components/portal/fleetCategories.tsx` exists in BOTH repos and must stay identical:
+matching is an exact slug compare. Partners add fleet themselves (Car Fleet / onboarding);
+admin has no add-fleet screen. The homepage passenger picker now runs to the largest
+category's max_passengers (16). The suitcase picker still stops at 6.
+
+═══════════════════════════════════════════════════════════════════════════════
+SESSION — 2026-09-02
 ═══════════════════════════════════════════════════════════════════════════════
 Guides re-routed by MARKET (country), not language · headline as H1 with the SEO title still
 going to Google · growth quick wins · localization added then REVERTED · 9 stale PRs triaged
