@@ -664,7 +664,7 @@ function CustomerHome() {
               <div>
                 <label className={labelCls}>{t("home.passengers")}</label>
                 <select value={passengers} onChange={e => setPassengers(Number(e.target.value))} className={selectCls}>
-                  {[1,2,3,4,5,6,7,8].map(n => (
+                  {[1,2,3,4,5,6,7,8,9].map(n => (
                     <option key={n} value={n}>{n} {n > 1 ? t("home.passengers.plural") : t("home.passenger")}</option>
                   ))}
                 </select>

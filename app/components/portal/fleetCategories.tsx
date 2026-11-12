@@ -65,6 +65,14 @@ export const FLEET_CATEGORIES: FleetCategory[] = [
     service_level: "executive",
   },
   {
+    slug: "van-9",
+    name: "9 Seater Van",
+    max_passengers: 9,
+    max_suitcases: 9,
+    max_hand_luggage: 5,
+    service_level: "standard",
+  },
+  {
     slug: "luxury",
     name: "Luxury",
     max_passengers: 4,
@@ -79,5 +87,15 @@ export const FLEET_CATEGORIES: FleetCategory[] = [
     max_suitcases: 16,
     max_hand_luggage: 8,
     service_level: "minibus",
+  },
+  {
+    // Goods, not people: the driver plus two in the cab, and the load space counted
+    // generously in suitcases so a removal or equipment job still matches.
+    slug: "cargo-van",
+    name: "Cargo Van",
+    max_passengers: 3,
+    max_suitcases: 20,
+    max_hand_luggage: 3,
+    service_level: "standard",
   },
 ];
